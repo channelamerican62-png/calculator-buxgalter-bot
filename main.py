@@ -31,20 +31,20 @@ from handlers.report_handler import (
 )
 from handlers.start import button_handler, start_command
 
-handlers = [logging.StreamHandler(sys.stdout)]
-try:
-    handlers.append(logging.FileHandler("bot.log", encoding="utf-8"))
-except Exception:
-    pass
+load_dotenv()
+
+IS_RENDER = bool(os.getenv("RENDER") or os.getenv("PORT"))
+
+log_handlers: list = [logging.StreamHandler(sys.stdout)]
+if not IS_RENDER:
+    log_handlers.append(logging.FileHandler("bot.log", encoding="utf-8"))
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
-    handlers=handlers,
+    handlers=log_handlers,
 )
 logger = logging.getLogger(__name__)
-
-load_dotenv()
 
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -58,23 +58,11 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         pass
 
 
-def start_health_check_server():
-    port = int(os.getenv("PORT", 8080))
-    try:
-        server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
-        logger.info("Health check server %d-portda ishga tushdi.", port)
-        server.serve_forever()
-    except Exception as e:
-        logger.error("Health check server xatoligi: %s", e)
-
-
-def main() -> None:
+def run_bot():
+    """Bot polling ni alohida thread da ishga tushiradi."""
     if not BOT_TOKEN:
         logger.error("BOT_TOKEN topilmadi! .env faylni tekshiring.")
         sys.exit(1)
-
-    if os.getenv("PORT") or os.getenv("RENDER"):
-        threading.Thread(target=start_health_check_server, daemon=True).start()
 
     logger.info("Bot ishga tushirilmoqda...")
     application = Application.builder().token(BOT_TOKEN).build()
@@ -118,6 +106,21 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❌ <b>Xatolik yuz berdi!</b>\n\nIltimos, qaytadan urinib ko'ring.",
             parse_mode="HTML",
         )
+
+
+def main() -> None:
+    if IS_RENDER:
+        # Render Web Service: bot background threadda, HTTP server asosiy threadda
+        bot_thread = threading.Thread(target=run_bot, daemon=True)
+        bot_thread.start()
+
+        port = int(os.getenv("PORT", 10000))
+        logger.info("Health check server %d-portda ishga tushdi.", port)
+        server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+        server.serve_forever()
+    else:
+        # Local ishga tushirish
+        run_bot()
 
 
 if __name__ == "__main__":
