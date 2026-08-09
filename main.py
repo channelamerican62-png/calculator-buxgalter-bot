@@ -31,13 +31,16 @@ from handlers.report_handler import (
 )
 from handlers.start import button_handler, start_command
 
+handlers = [logging.StreamHandler(sys.stdout)]
+try:
+    handlers.append(logging.FileHandler("bot.log", encoding="utf-8"))
+except Exception:
+    pass
+
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
-    handlers=[
-        logging.FileHandler("bot.log", encoding="utf-8"),
-        logging.StreamHandler(sys.stdout),
-    ],
+    handlers=handlers,
 )
 logger = logging.getLogger(__name__)
 
