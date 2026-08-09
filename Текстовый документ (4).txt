@@ -1,0 +1,3147 @@
+
+from docx import Document
+from docx.shared import Inches, Pt, RGBColor, Cm
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.style import WD_STYLE_TYPE
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+
+doc = Document()
+
+# Helper functions
+def set_cell_shading(cell, color):
+    shading = OxmlElement('w:shd')
+    shading.set(qn('w:fill'), color)
+    cell._tc.get_or_add_tcPr().append(shading)
+
+def set_run_font(run, font_name='Calibri', size=11, bold=False, color=None):
+    run.font.name = font_name
+    run.font.size = Pt(size)
+    run.font.bold = bold
+    if color:
+        run.font.color.rgb = RGBColor(*color)
+
+def add_heading_custom(doc, text, level=1):
+    heading = doc.add_heading(text, level=level)
+    for run in heading.runs:
+        run.font.name = 'Calibri'
+        run.font.color.rgb = RGBColor(0, 51, 102) if level == 1 else RGBColor(0, 102, 153)
+        run.font.bold = True
+    return heading
+
+# Title
+title = doc.add_paragraph()
+title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+run = title.add_run("O'ZBEKISTON BUXGALTERIYA TELEGRAM BOTI")
+set_run_font(run, size=24, bold=True, color=(0, 51, 102))
+run = title.add_run("\nTo'liq Amalga Oshirish Rejasi (v2.0)")
+set_run_font(run, size=16, bold=True, color=(0, 102, 153))
+
+doc.add_paragraph()
+subtitle = doc.add_paragraph()
+subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+run = subtitle.add_run("2026-yil | O'zbekiston Respublikasi Soliq Kodeksi va NSBU asosida")
+set_run_font(run, size=12, italic=True, color=(100, 100, 100))
+
+doc.add_page_break()
+
+# Table of Contents placeholder
+doc.add_paragraph("MUNDARIJA", style='Heading 1')
+toc_items = [
+    "1. Loyiha Tavsifi va Maqsadi",
+    "2. Soliq Stavkalari (2026-yil, to'g'rilangan)",
+    "3. Hisoblar Rejasi (NSBU bo'yicha to'g'rilangan)",
+    "4. Loyiha Arxitekturasi va Fayl Strukturasi",
+    "5. Ma'lumotlar Bazasi (SQLite) Strukturasi",
+    "6. Modullar Tavsifi va Kod Namunalari",
+    "7. Telegram Bot Interfeysi (UI/UX)",
+    "8. Excel Hisobotlari Dizayni",
+    "9. Word Hujjatlari Generatori",
+    "10. Xavfsizlik va Maxfiylik",
+    "11. Sinov (Testing) Rejasi",
+    "12. Joylashtirish (Deployment) Ko'rsatmalari",
+    "13. Antigravity IDE Prompti"
+]
+for item in toc_items:
+    p = doc.add_paragraph(item, style='List Number')
+    p.paragraph_format.left_indent = Cm(1)
+
+doc.add_page_break()
+
+# ============================================
+# 1. Loyiha Tavsifi
+# ============================================
+add_heading_custom(doc, "1. Loyiha Tavsifi va Maqsadi", 1)
+
+doc.add_paragraph(
+    "Ushbu loyiha O'zbekiston Respublikasi hududida faoliyat yurituvchi yuridik va jismoniy shaxslar uchun "
+    "avtomatlashtirilgan buxgalteriya xizmatini taqdim etuvchi Telegram bot yaratishni ko'zda tutadi. "
+    "Bot foydalanuvchidan Excel fayl yoki matnli topshiriq qabul qiladi, O'zbekiston Soliq Kodeksi va Milliy "
+    "Buxgalteriya Hisobi Standartlari (NSBU) asosida barcha hisob-kitoblarni amalga oshiradi va tayyor "
+    "chiroyli Excel/Word fayllarni taqdim etadi."
+)
+
+features = [
+    ("Avtomatik Hisoblash", "QQS, JSHDS, Ijtimoiy soliq, Ish haqi, Aylanma soliq, Foyda solig'i va boshqa barcha soliqlarni avtomatik hisoblash"),
+    ("Excel/Word Export", "Professional dizayndagi hisobot fayllarini yaratish va yuborish"),
+    ("Provodkalar Generatori", "NSBU hisob raqamlari asosida avtomatik buxgalteriya provodkalarini yaratish"),
+    ("Soliq Rejimlari", "Umumiy, soddalashtirilgan (4%/1%) va 6% QQS rejimlarini qo'llab-quvvatlash"),
+    ("Tarix Saqlash", "Foydalanuvchining barcha hisobotlari va kompaniya ma'lumotlari SQLite ma'lumotlar bazasida saqlanadi"),
+    ("Ko'p Til Qo'llab-quvvatlash", "O'zbek (lotin), Rus va O'zbek (kirill) tillarida ishlash imkoniyati"),
+]
+
+for title, desc in features:
+    p = doc.add_paragraph(style='List Bullet')
+    run = p.add_run(f"{title}: ")
+    set_run_font(run, bold=True)
+    p.add_run(desc)
+
+doc.add_paragraph()
+p = doc.add_paragraph()
+run = p.add_run("⚠️ MUHIM OG'OHLANTIRISH: ")
+set_run_font(run, bold=True, color=(200, 0, 0))
+p.add_run("Bot yaratgan hisobotlar ichki buxgalteriya hisobi uchun mo'ljallangan. Soliq organlariga rasmiy taqdim etish uchun "
+          "elektron imzo (ECP) va e-faktura integratsiyasi talab qilinadi. Bu funksiyalar keyingi versiyalarda qo'shiladi.")
+
+# ============================================
+# 2. Soliq Stavkalari
+# ============================================
+doc.add_page_break()
+add_heading_custom(doc, "2. Soliq Stavkalari (2026-yil, To'g'rilangan)", 1)
+
+doc.add_paragraph(
+    "Quyidagi stavkalar O'zbekiston Respublikasi Soliq Kodeksining 2026-yilgi amaldagi talablariga mos ravishda "
+    "tuzilgan. Botning hisoblash dvigateli faqat ushbu stavkalardan foydalanadi."
+)
+
+# Tax rates table
+table = doc.add_table(rows=1, cols=4)
+table.style = 'Table Grid'
+table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+headers = ["Soliq Turi", "Stavka", "Kim Tomonidan", "Izoh"]
+for i, h in enumerate(headers):
+    cell = table.rows[0].cells[i]
+    cell.text = h
+    set_cell_shading(cell, '1F4E79')
+    for para in cell.paragraphs:
+        for run in para.runs:
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(255, 255, 255)
+            run.font.size = Pt(11)
+
+tax_data = [
+    ("QQS (Qo'shilgan qiymat solig'i)", "12%", "Iste'molchi", "Standart stavka. Import va ichki bozor uchun."),
+    ("JSHDS (Jismoniy shaxslar daromad solig'i)", "12%", "Xodim (ish beruvchi ushlab qoladi)", "Ish haqidan ushlanadi. Soliqdan ozod minimum: 1.5 MKIH (~1 650 000 so'm)"),
+    ("Ijtimoiy Soliq", "12%", "Ish beruvchi", "Ish haqi fondidan hisoblanadi"),
+    ("Pensiya Jamg'armasi (ish beruvchi)", "0.1%", "Ish beruvchi", "Shaxsiy pensiya hisobvarag'iga. JSHDSdan alohida."),
+    ("Ijtimoiy Sug'urta (xodim)", "4%", "Xodim", "Ish haqidan ushlanadi"),
+    ("Ishsizlik Sug'urtasi", "0.5%", "Xodim", "Ish haqidan ushlanadi"),
+    ("Uy-joy Jamg'armasi", "1%", "Xodim", "Ish haqidan ushlanadi"),
+    ("INCES (Kasbiy Ta'lim)", "0.5%", "Xodim", "Ish haqidan ushlanadi"),
+    ("Foyda Soliqi (yuridik shaxslar)", "15%", "Korxona", "Banklar va qazilmalar uchun 20%"),
+    ("Aylanma Soliq (soddalashtirilgan)", "4%", "YTT/kichik biznes", "Yillik aylanma 1 mlrd so'mgacha"),
+    ("Aylanma Soliq (imtiyozli)", "1%", "YTT/kichik biznes", "2026-yildan boshlab yangi imtiyoz"),
+    ("QQS (soddalashtirilgan)", "6%", "Soliq to'lovchi", "2026-yil 1-iyundan yangi rejim"),
+    ("Mol-mulk Soliqi", "1.5%", "Yuridik shaxs", "Ko'chmas mulk va asosiy vositalar uchun"),
+    ("Yer Soliqi", "0.95%", "Qishloq xo'jaligi", "Qishloq xo'jaligi yerlari uchun (shaharlarida boshqacha)"),
+]
+
+for row_data in tax_data:
+    row = table.add_row()
+    for i, text in enumerate(row_data):
+        cell = row.cells[i]
+        cell.text = text
+        if i == 1:  # Stavka column
+            for para in cell.paragraphs:
+                for run in para.runs:
+                    run.font.bold = True
+                    run.font.color.rgb = RGBColor(0, 128, 0)
+
+doc.add_paragraph()
+p = doc.add_paragraph()
+run = p.add_run("Xodimdan Jami Ushlanmalar: ")
+set_run_font(run, bold=True, color=(200, 0, 0))
+p.add_run("JSHDS (12%) + Ijtimoiy sug'urta (4%) + Ishsizlik (0.5%) + Uy-joy (1%) + INCES (0.5%) = "
+          "JAMI 18% (soliqdan ozod minimumdan yuqori qismdan)")
+
+p = doc.add_paragraph()
+run = p.add_run("Ish Beruvchi Jami To'lovlari: ")
+set_run_font(run, bold=True, color=(200, 0, 0))
+p.add_run("Ijtimoiy soliq (12%) + Pensiya jamg'armasi (0.1%) = JAMI 12.1%")
+
+# ============================================
+# 3. Hisoblar Rejasi
+# ============================================
+doc.add_page_break()
+add_heading_custom(doc, "3. Hisoblar Rejasi (NSBU bo'yicha To'g'rilangan)", 1)
+
+doc.add_paragraph(
+    "Quyidagi hisob raqamlari Milliy Buxgalteriya Hisobi Standartlari (NSBU) va O'zbekiston Respublikasi "
+    "Moliya Vazirligining amaldagi talablariga mos ravishda tuzilgan. Rejadagi xatolar to'g'rilangan."
+)
+
+# Account table
+accounts = [
+    ("01", "Asosiy Vositalar", "0110", "Yer uchastkalari", "Debet"),
+    ("01", "Asosiy Vositalar", "0120", "Bino va inshootlar", "Debet"),
+    ("01", "Asosiy Vositalar", "0130", "Mashina va uskunalar", "Debet"),
+    ("01", "Asosiy Vositalar", "0140", "Transport vositalari", "Debet"),
+    ("01", "Asosiy Vositalar", "0150", "Mebel va ofis jihozlari", "Debet"),
+    ("02", "Asosiy Vositalarning Eshitilishi", "0210", "Yig'ilgan eshitma", "Kredit"),
+    ("10", "Materiallar", "1010", "Xom ashyo va materiallar", "Debet"),
+    ("10", "Materiallar", "1020", "Yonilg'i", "Debet"),
+    ("10", "Materiallar", "1030", "Zapas qismlar", "Debet"),
+    ("20", "Ishlab Chiqarish", "2010", "Asosiy ishlab chiqarish", "Debet"),
+    ("20", "Ishlab Chiqarish", "2020", "Yordamchi ishlab chiqarish", "Debet"),
+    ("40", "Tayyor Mahsulot", "4010", "Tayyor mahsulotlar ombori", "Debet"),
+    ("41", "Tovarlar", "4110", "Sotish uchun tovarlar", "Debet"),
+    ("50", "Kassa", "5010", "Kassa (so'm)", "Debet"),
+    ("50", "Kassa", "5020", "Kassa (valyuta)", "Debet"),
+    ("51", "Hisob-Kitob Schyoti", "5110", "Asosiy hisob-kitob schyoti (so'm)", "Debet"),
+    ("51", "Hisob-Kitob Schyoti", "5120", "Valyuta hisob-kitob schyoti", "Debet"),
+    ("60", "Ta'minotchilar va Pudratchilar", "6010", "Ta'minotchilar bilan hisob-kitoblar", "Kredit"),
+    ("60", "Ta'minotchilar va Pudratchilar", "6020", "Pudratchilar bilan hisob-kitoblar", "Kredit"),
+    ("62", "Xaridorlar va Buyurtmachilar", "6210", "Xaridorlar bilan hisob-kitoblar", "Debet"),
+    ("66", "Qisqa Muddatli Kreditlar", "6610", "Bank kreditlari", "Kredit"),
+    ("67", "Ish Haqi Bo'yicha Hisoblanishlar", "6710", "Ish haqi bo'yicha hisoblanishlar", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6810", "QQS bo'yicha hisoblanishlar", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6820", "JSHDS bo'yicha hisoblanishlar", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6830", "Ijtimoiy soliq bo'yicha hisoblanishlar", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6840", "Foyda solig'i bo'yicha hisoblanishlar", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6850", "Aylanma soliq bo'yicha hisoblanishlar", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6860", "Mol-mulk solig'i", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6870", "Yer solig'i", "Kredit"),
+    ("69", "Sug'urta Hisoblanishlari", "6910", "Ijtimoiy sug'urta bo'yicha hisoblanishlar", "Kredit"),
+    ("69", "Sug'urta Hisoblanishlari", "6920", "Ishsizlik sug'urtasi", "Kredit"),
+    ("69", "Sug'urta Hisoblanishlari", "6930", "Pensiya jamg'armasi (ish beruvchi)", "Kredit"),
+    ("69", "Sug'urta Hisoblanishlari", "6940", "Uy-joy jamg'armasi", "Kredit"),
+    ("69", "Sug'urta Hisoblanishlari", "6950", "INCES kasbiy ta'lim", "Kredit"),
+    ("80", "Sotish Daromadi", "8010", "Mahsulot sotish daromadi", "Kredit"),
+    ("80", "Sotish Daromadi", "8020", "Xizmat ko'rsatish daromadi", "Kredit"),
+    ("90", "Xarajatlar", "9010", "Asosiy ishlab chiqarish xarajatlari", "Debet"),
+    ("90", "Xarajatlar", "9020", "Boshqaruv xarajatlari", "Debet"),
+    ("90", "Xarajatlar", "9030", "Sotish xarajatlari", "Debet"),
+    ("91", "Boshqa Daromad va Xarajatlar", "9110", "Foizlar bo'yicha daromad", "Kredit"),
+    ("91", "Boshqa Daromad va Xarajatlar", "9120", "Foizlar bo'yicha xarajat", "Debet"),
+    ("99", "Foyda va Zarar", "9910", "Sof foyda (zarar)", "Debet/Kredit"),
+]
+
+table = doc.add_table(rows=1, cols=5)
+table.style = 'Table Grid'
+headers = ["Sinif", "Hisob Guruh", "Hisob Raqami", "Nomi", "Normal Balans"]
+for i, h in enumerate(headers):
+    cell = table.rows[0].cells[i]
+    cell.text = h
+    set_cell_shading(cell, '1F4E79')
+    for para in cell.paragraphs:
+        for run in para.runs:
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(255, 255, 255)
+
+for row_data in accounts:
+    row = table.add_row()
+    for i, text in enumerate(row_data):
+        cell = row.cells[i]
+        cell.text = text
+
+doc.add_paragraph()
+p = doc.add_paragraph()
+run = p.add_run("❌ Rejadagi Xatolar To'g'rilandi: ")
+set_run_font(run, bold=True, color=(200, 0, 0))
+doc.add_paragraph("• 6010 'Tadbirkorlar' → 6010 'Ta'minotchilar va pudratchilar bilan hisob-kitoblar'", style='List Bullet')
+doc.add_paragraph("• 6520 'INPS' → INPS alohida hisob raqami yo'q, 6930 va 6940 ga ajratildi", style='List Bullet')
+doc.add_paragraph("• 3310 Foyda solig'i → 6840 'Foyda solig'i bo'yicha hisoblanishlar' qo'shildi", style='List Bullet')
+doc.add_paragraph("• 6410 umumiy soliq hisobi → 6810-6870 ga tafsilotlarga bo'ldik", style='List Bullet')
+
+print("Part 1 done")
+
+
+
+
+
+
+from docx import Document
+from docx.shared import Inches, Pt, RGBColor, Cm
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+
+doc = Document()
+
+# Helper functions
+def set_cell_shading(cell, color):
+    shading = OxmlElement('w:shd')
+    shading.set(qn('w:fill'), color)
+    cell._tc.get_or_add_tcPr().append(shading)
+
+def set_run_font(run, font_name='Calibri', size=11, bold=False, italic=False, color=None):
+    run.font.name = font_name
+    run.font.size = Pt(size)
+    run.font.bold = bold
+    run.font.italic = italic
+    if color:
+        run.font.color.rgb = RGBColor(*color)
+
+def add_heading_custom(doc, text, level=1):
+    heading = doc.add_heading(text, level=level)
+    for run in heading.runs:
+        run.font.name = 'Calibri'
+        run.font.color.rgb = RGBColor(0, 51, 102) if level == 1 else RGBColor(0, 102, 153)
+        run.font.bold = True
+    return heading
+
+# Title
+title = doc.add_paragraph()
+title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+run = title.add_run("O'ZBEKISTON BUXGALTERIYA TELEGRAM BOTI")
+set_run_font(run, size=24, bold=True, color=(0, 51, 102))
+run = title.add_run("\nTo'liq Amalga Oshirish Rejasi (v2.0)")
+set_run_font(run, size=16, bold=True, color=(0, 102, 153))
+
+doc.add_paragraph()
+subtitle = doc.add_paragraph()
+subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
+run = subtitle.add_run("2026-yil | O'zbekiston Respublikasi Soliq Kodeksi va NSBU asosida")
+set_run_font(run, size=12, italic=True, color=(100, 100, 100))
+
+doc.add_page_break()
+
+# Table of Contents placeholder
+doc.add_paragraph("MUNDARIJA", style='Heading 1')
+toc_items = [
+    "1. Loyiha Tavsifi va Maqsadi",
+    "2. Soliq Stavkalari (2026-yil, to'g'rilangan)",
+    "3. Hisoblar Rejasi (NSBU bo'yicha to'g'rilangan)",
+    "4. Loyiha Arxitekturasi va Fayl Strukturasi",
+    "5. Ma'lumotlar Bazasi (SQLite) Strukturasi",
+    "6. Modullar Tavsifi va Kod Namunalari",
+    "7. Telegram Bot Interfeysi (UI/UX)",
+    "8. Excel Hisobotlari Dizayni",
+    "9. Word Hujjatlari Generatori",
+    "10. Xavfsizlik va Maxfiylik",
+    "11. Sinov (Testing) Rejasi",
+    "12. Joylashtirish (Deployment) Ko'rsatmalari",
+    "13. Antigravity IDE Prompti"
+]
+for item in toc_items:
+    p = doc.add_paragraph(item, style='List Number')
+    p.paragraph_format.left_indent = Cm(1)
+
+doc.add_page_break()
+
+# ============================================
+# 1. Loyiha Tavsifi
+# ============================================
+add_heading_custom(doc, "1. Loyiha Tavsifi va Maqsadi", 1)
+
+doc.add_paragraph(
+    "Ushbu loyiha O'zbekiston Respublikasi hududida faoliyat yurituvchi yuridik va jismoniy shaxslar uchun "
+    "avtomatlashtirilgan buxgalteriya xizmatini taqdim etuvchi Telegram bot yaratishni ko'zda tutadi. "
+    "Bot foydalanuvchidan Excel fayl yoki matnli topshiriq qabul qiladi, O'zbekiston Soliq Kodeksi va Milliy "
+    "Buxgalteriya Hisobi Standartlari (NSBU) asosida barcha hisob-kitoblarni amalga oshiradi va tayyor "
+    "chiroyli Excel/Word fayllarni taqdim etadi."
+)
+
+features = [
+    ("Avtomatik Hisoblash", "QQS, JSHDS, Ijtimoiy soliq, Ish haqi, Aylanma soliq, Foyda solig'i va boshqa barcha soliqlarni avtomatik hisoblash"),
+    ("Excel/Word Export", "Professional dizayndagi hisobot fayllarini yaratish va yuborish"),
+    ("Provodkalar Generatori", "NSBU hisob raqamlari asosida avtomatik buxgalteriya provodkalarini yaratish"),
+    ("Soliq Rejimlari", "Umumiy, soddalashtirilgan (4%/1%) va 6% QQS rejimlarini qo'llab-quvvatlash"),
+    ("Tarix Saqlash", "Foydalanuvchining barcha hisobotlari va kompaniya ma'lumotlari SQLite ma'lumotlar bazasida saqlanadi"),
+    ("Ko'p Til Qo'llab-quvvatlash", "O'zbek (lotin), Rus va O'zbek (kirill) tillarida ishlash imkoniyati"),
+]
+
+for title, desc in features:
+    p = doc.add_paragraph(style='List Bullet')
+    run = p.add_run(f"{title}: ")
+    set_run_font(run, bold=True)
+    p.add_run(desc)
+
+doc.add_paragraph()
+p = doc.add_paragraph()
+run = p.add_run("⚠️ MUHIM OG'OHLANTIRISH: ")
+set_run_font(run, bold=True, color=(200, 0, 0))
+p.add_run("Bot yaratgan hisobotlar ichki buxgalteriya hisobi uchun mo'ljallangan. Soliq organlariga rasmiy taqdim etish uchun "
+          "elektron imzo (ECP) va e-faktura integratsiyasi talab qilinadi. Bu funksiyalar keyingi versiyalarda qo'shiladi.")
+
+# ============================================
+# 2. Soliq Stavkalari
+# ============================================
+doc.add_page_break()
+add_heading_custom(doc, "2. Soliq Stavkalari (2026-yil, To'g'rilangan)", 1)
+
+doc.add_paragraph(
+    "Quyidagi stavkalar O'zbekiston Respublikasi Soliq Kodeksining 2026-yilgi amaldagi talablariga mos ravishda "
+    "tuzilgan. Botning hisoblash dvigateli faqat ushbu stavkalardan foydalanadi."
+)
+
+# Tax rates table
+table = doc.add_table(rows=1, cols=4)
+table.style = 'Table Grid'
+table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+headers = ["Soliq Turi", "Stavka", "Kim Tomonidan", "Izoh"]
+for i, h in enumerate(headers):
+    cell = table.rows[0].cells[i]
+    cell.text = h
+    set_cell_shading(cell, '1F4E79')
+    for para in cell.paragraphs:
+        for run in para.runs:
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(255, 255, 255)
+            run.font.size = Pt(11)
+
+tax_data = [
+    ("QQS (Qo'shilgan qiymat solig'i)", "12%", "Iste'molchi", "Standart stavka. Import va ichki bozor uchun."),
+    ("JSHDS (Jismoniy shaxslar daromad solig'i)", "12%", "Xodim (ish beruvchi ushlab qoladi)", "Ish haqidan ushlanadi. Soliqdan ozod minimum: 1.5 MKIH (~1 650 000 so'm)"),
+    ("Ijtimoiy Soliq", "12%", "Ish beruvchi", "Ish haqi fondidan hisoblanadi"),
+    ("Pensiya Jamg'armasi (ish beruvchi)", "0.1%", "Ish beruvchi", "Shaxsiy pensiya hisobvarag'iga. JSHDSdan alohida."),
+    ("Ijtimoiy Sug'urta (xodim)", "4%", "Xodim", "Ish haqidan ushlanadi"),
+    ("Ishsizlik Sug'urtasi", "0.5%", "Xodim", "Ish haqidan ushlanadi"),
+    ("Uy-joy Jamg'armasi", "1%", "Xodim", "Ish haqidan ushlanadi"),
+    ("INCES (Kasbiy Ta'lim)", "0.5%", "Xodim", "Ish haqidan ushlanadi"),
+    ("Foyda Soliqi (yuridik shaxslar)", "15%", "Korxona", "Banklar va qazilmalar uchun 20%"),
+    ("Aylanma Soliq (soddalashtirilgan)", "4%", "YTT/kichik biznes", "Yillik aylanma 1 mlrd so'mgacha"),
+    ("Aylanma Soliq (imtiyozli)", "1%", "YTT/kichik biznes", "2026-yildan boshlab yangi imtiyoz"),
+    ("QQS (soddalashtirilgan)", "6%", "Soliq to'lovchi", "2026-yil 1-iyundan yangi rejim"),
+    ("Mol-mulk Soliqi", "1.5%", "Yuridik shaxs", "Ko'chmas mulk va asosiy vositalar uchun"),
+    ("Yer Soliqi", "0.95%", "Qishloq xo'jaligi", "Qishloq xo'jaligi yerlari uchun (shaharlarida boshqacha)"),
+]
+
+for row_data in tax_data:
+    row = table.add_row()
+    for i, text in enumerate(row_data):
+        cell = row.cells[i]
+        cell.text = text
+        if i == 1:  # Stavka column
+            for para in cell.paragraphs:
+                for run in para.runs:
+                    run.font.bold = True
+                    run.font.color.rgb = RGBColor(0, 128, 0)
+
+doc.add_paragraph()
+p = doc.add_paragraph()
+run = p.add_run("Xodimdan Jami Ushlanmalar: ")
+set_run_font(run, bold=True, color=(200, 0, 0))
+p.add_run("JSHDS (12%) + Ijtimoiy sug'urta (4%) + Ishsizlik (0.5%) + Uy-joy (1%) + INCES (0.5%) = "
+          "JAMI 18% (soliqdan ozod minimumdan yuqori qismdan)")
+
+p = doc.add_paragraph()
+run = p.add_run("Ish Beruvchi Jami To'lovlari: ")
+set_run_font(run, bold=True, color=(200, 0, 0))
+p.add_run("Ijtimoiy soliq (12%) + Pensiya jamg'armasi (0.1%) = JAMI 12.1%")
+
+# ============================================
+# 3. Hisoblar Rejasi
+# ============================================
+doc.add_page_break()
+add_heading_custom(doc, "3. Hisoblar Rejasi (NSBU bo'yicha To'g'rilangan)", 1)
+
+doc.add_paragraph(
+    "Quyidagi hisob raqamlari Milliy Buxgalteriya Hisobi Standartlari (NSBU) va O'zbekiston Respublikasi "
+    "Moliya Vazirligining amaldagi talablariga mos ravishda tuzilgan. Rejadagi xatolar to'g'rilangan."
+)
+
+# Account table
+accounts = [
+    ("01", "Asosiy Vositalar", "0110", "Yer uchastkalari", "Debet"),
+    ("01", "Asosiy Vositalar", "0120", "Bino va inshootlar", "Debet"),
+    ("01", "Asosiy Vositalar", "0130", "Mashina va uskunalar", "Debet"),
+    ("01", "Asosiy Vositalar", "0140", "Transport vositalari", "Debet"),
+    ("01", "Asosiy Vositalar", "0150", "Mebel va ofis jihozlari", "Debet"),
+    ("02", "Asosiy Vositalarning Eshitilishi", "0210", "Yig'ilgan eshitma", "Kredit"),
+    ("10", "Materiallar", "1010", "Xom ashyo va materiallar", "Debet"),
+    ("10", "Materiallar", "1020", "Yonilg'i", "Debet"),
+    ("10", "Materiallar", "1030", "Zapas qismlar", "Debet"),
+    ("20", "Ishlab Chiqarish", "2010", "Asosiy ishlab chiqarish", "Debet"),
+    ("20", "Ishlab Chiqarish", "2020", "Yordamchi ishlab chiqarish", "Debet"),
+    ("40", "Tayyor Mahsulot", "4010", "Tayyor mahsulotlar ombori", "Debet"),
+    ("41", "Tovarlar", "4110", "Sotish uchun tovarlar", "Debet"),
+    ("50", "Kassa", "5010", "Kassa (so'm)", "Debet"),
+    ("50", "Kassa", "5020", "Kassa (valyuta)", "Debet"),
+    ("51", "Hisob-Kitob Schyoti", "5110", "Asosiy hisob-kitob schyoti (so'm)", "Debet"),
+    ("51", "Hisob-Kitob Schyoti", "5120", "Valyuta hisob-kitob schyoti", "Debet"),
+    ("60", "Ta'minotchilar va Pudratchilar", "6010", "Ta'minotchilar bilan hisob-kitoblar", "Kredit"),
+    ("60", "Ta'minotchilar va Pudratchilar", "6020", "Pudratchilar bilan hisob-kitoblar", "Kredit"),
+    ("62", "Xaridorlar va Buyurtmachilar", "6210", "Xaridorlar bilan hisob-kitoblar", "Debet"),
+    ("66", "Qisqa Muddatli Kreditlar", "6610", "Bank kreditlari", "Kredit"),
+    ("67", "Ish Haqi Bo'yicha Hisoblanishlar", "6710", "Ish haqi bo'yicha hisoblanishlar", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6810", "QQS bo'yicha hisoblanishlar", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6820", "JSHDS bo'yicha hisoblanishlar", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6830", "Ijtimoiy soliq bo'yicha hisoblanishlar", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6840", "Foyda solig'i bo'yicha hisoblanishlar", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6850", "Aylanma soliq bo'yicha hisoblanishlar", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6860", "Mol-mulk solig'i", "Kredit"),
+    ("68", "Budjet va Soliqlar", "6870", "Yer solig'i", "Kredit"),
+    ("69", "Sug'urta Hisoblanishlari", "6910", "Ijtimoiy sug'urta bo'yicha hisoblanishlar", "Kredit"),
+    ("69", "Sug'urta Hisoblanishlari", "6920", "Ishsizlik sug'urtasi", "Kredit"),
+    ("69", "Sug'urta Hisoblanishlari", "6930", "Pensiya jamg'armasi (ish beruvchi)", "Kredit"),
+    ("69", "Sug'urta Hisoblanishlari", "6940", "Uy-joy jamg'armasi", "Kredit"),
+    ("69", "Sug'urta Hisoblanishlari", "6950", "INCES kasbiy ta'lim", "Kredit"),
+    ("80", "Sotish Daromadi", "8010", "Mahsulot sotish daromadi", "Kredit"),
+    ("80", "Sotish Daromadi", "8020", "Xizmat ko'rsatish daromadi", "Kredit"),
+    ("90", "Xarajatlar", "9010", "Asosiy ishlab chiqarish xarajatlari", "Debet"),
+    ("90", "Xarajatlar", "9020", "Boshqaruv xarajatlari", "Debet"),
+    ("90", "Xarajatlar", "9030", "Sotish xarajatlari", "Debet"),
+    ("91", "Boshqa Daromad va Xarajatlar", "9110", "Foizlar bo'yicha daromad", "Kredit"),
+    ("91", "Boshqa Daromad va Xarajatlar", "9120", "Foizlar bo'yicha xarajat", "Debet"),
+    ("99", "Foyda va Zarar", "9910", "Sof foyda (zarar)", "Debet/Kredit"),
+]
+
+table = doc.add_table(rows=1, cols=5)
+table.style = 'Table Grid'
+headers = ["Sinif", "Hisob Guruh", "Hisob Raqami", "Nomi", "Normal Balans"]
+for i, h in enumerate(headers):
+    cell = table.rows[0].cells[i]
+    cell.text = h
+    set_cell_shading(cell, '1F4E79')
+    for para in cell.paragraphs:
+        for run in para.runs:
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(255, 255, 255)
+
+for row_data in accounts:
+    row = table.add_row()
+    for i, text in enumerate(row_data):
+        cell = row.cells[i]
+        cell.text = text
+
+doc.add_paragraph()
+p = doc.add_paragraph()
+run = p.add_run("❌ Rejadagi Xatolar To'g'rilandi: ")
+set_run_font(run, bold=True, color=(200, 0, 0))
+doc.add_paragraph("• 6010 'Tadbirkorlar' → 6010 'Ta'minotchilar va pudratchilar bilan hisob-kitoblar'", style='List Bullet')
+doc.add_paragraph("• 6520 'INPS' → INPS alohida hisob raqami yo'q, 6930 va 6940 ga ajratildi", style='List Bullet')
+doc.add_paragraph("• 3310 Foyda solig'i → 6840 'Foyda solig'i bo'yicha hisoblanishlar' qo'shildi", style='List Bullet')
+doc.add_paragraph("• 6410 umumiy soliq hisobi → 6810-6870 ga tafsilotlarga bo'ldik", style='List Bullet')
+
+print("Part 1 done")
+
+
+
+
+
+
+
+# ============================================
+# 4. Loyiha Arxitekturasi
+# ============================================
+doc.add_page_break()
+add_heading_custom(doc, "4. Loyiha Arxitekturasi va Fayl Strukturasi", 1)
+
+doc.add_paragraph(
+    "Loyiha modulli arxitekturada quriladi. Har bir modul alohida vazifani bajaradi va o'zaro mustaqil ishlaydi. "
+    "Bu testlash, xatolarni tuzatish va yangi funksiyalar qo'shishni osonlashtiradi."
+)
+
+add_heading_custom(doc, "4.1. Fayl Strukturasi", 2)
+
+structure = """
+uzbekistan_accounting_bot/
+├── bot.py                      # Telegram Bot asosiy kodi (python-telegram-bot v20+)
+├── accounting_engine.py        # Soliq va buxgalteriya hisoblash dvigateli
+├── excel_processor.py          # Excel fayllarni o'qish, hisoblash va bezatish
+├── word_processor.py           # Word hujjatlar generatori
+├── database.py                 # SQLite ma'lumotlar bazasi bilan ishlash
+├── config.py                   # Bot konfiguratsiyasi (token, sozlamalar)
+├── tax_regimes.py              # Soliq rejimlari (umumiy, soddalashtirilgan, 6%)
+├── validators.py               # Hisob raqamlari va ma'lumotlarni tekshirish
+├── reports.py                  # Soliq deklaratsiyalari shakllari
+├── utils.py                    # Yordamchi funksiyalar
+├── requirements.txt            # Kerakli Python kutubxonalari
+├── .env                        # Muhit o'zgaruvchilari (token, maxfiy kalitlar)
+├── .env.example                # .env namunasi (GitHub uchun)
+├── README.md                   # Loyiha hujjatlari
+├── data/
+│   └── accounting.db           # SQLite ma'lumotlar bazasi
+├── outputs/                    # Generatsiya qilingan fayllar
+│   ├── excel/                  # Excel hisobotlari
+│   └── word/                   # Word hujjatlari
+├── templates/                  # Shablon fayllar
+│   ├── excel/
+│   │   ├── salary_template.xlsx
+│   │   ├── turnover_template.xlsx
+│   │   └── osv_template.xlsx
+│   └── word/
+│       ├── contract_template.docx
+│       ├── invoice_template.docx
+│       └── act_template.docx
+├── tests/                      # Test fayllari
+│   ├── test_accounting.py
+│   ├── test_excel.py
+│   └── test_bot.py
+└── logs/                       # Log fayllari
+    └── bot.log
+"""
+
+doc.add_paragraph(structure, style='Normal')
+
+add_heading_custom(doc, "4.2. Modullar O'zaro Aloqasi", 2)
+
+doc.add_paragraph(
+    "Bot ish jarayonida quyidagi ketma-ketlikda ishlaydi:"
+)
+
+flow = [
+    "1. Foydalanuvchi Telegram orqali Excel fayl yoki matnli topshiriq yuboradi",
+    "2. bot.py faylni qabul qiladi va validators.py orqali tekshiradi",
+    "3. Ma'lumotlar database.py orqali SQLite bazasiga saqlanadi",
+    "4. accounting_engine.py hisob-kitoblarni amalga oshiradi (tax_regimes.py dan soliq rejimini oladi)",
+    "5. excel_processor.py yoki word_processor.py tayyor faylni yaratadi",
+    "6. Tayyor fayl foydalanuvchiga yuboriladi va outputs/ papkasiga saqlanadi",
+    "7. reports.py kerak bo'lsa soliq deklaratsiyasi shaklini yaratadi",
+]
+
+for step in flow:
+    doc.add_paragraph(step, style='List Number')
+
+# ============================================
+# 5. Ma'lumotlar Bazasi
+# ============================================
+doc.add_page_break()
+add_heading_custom(doc, "5. Ma'lumotlar Bazasi (SQLite) Strukturasi", 1)
+
+doc.add_paragraph(
+    "SQLite ma'lumotlar bazasi foydalanuvchilar, kompaniyalar, hisobotlar tarixini saqlash uchun ishlatiladi. "
+    "Bu foydalanuvchining oldingi hisobotlariga qayta murojaat qilish, statistikani yuritish va botning "
+    "xotirasini saqlash imkonini beradi."
+)
+
+add_heading_custom(doc, "5.1. Jadvallar Strukturasi", 2)
+
+tables = [
+    ("users", "Foydalanuvchilar ma'lumotlari", 
+     "id, telegram_id, username, full_name, phone, language, created_at, is_active"),
+    ("companies", "Kompaniyalar ma'lumotlari",
+     "id, user_id, name, stir, address, director_name, accountant_name, tax_regime, created_at"),
+    ("employees", "Xodimlar ma'lumotlari",
+     "id, company_id, full_name, position, passport, pinfl, salary, hire_date, is_active"),
+    ("salary_reports", "Ish haqi hisobotlari",
+     "id, company_id, month, year, gross_total, deductions_total, net_total, created_at"),
+    ("salary_details", "Ish haqi tafsilotlari",
+     "id, report_id, employee_id, gross_salary, jshds, social_insurance, unemployment, housing, inces, pension, net_salary"),
+    ("turnover_reports", "Aylanma hisobotlari",
+     "id, company_id, month, year, total_income, total_expense, vat_amount, turnover_tax, profit_tax, created_at"),
+    ("documents", "Yaratilgan hujjatlar",
+     "id, company_id, doc_type, file_path, file_name, created_at, status"),
+    ("transactions", "Buxgalteriya provodkalari",
+     "id, company_id, date, debit_account, credit_account, amount, description, document_ref, created_at"),
+    ("settings", "Bot sozlamalari",
+     "id, key, value, description"),
+]
+
+for name, desc, fields in tables:
+    p = doc.add_paragraph()
+    run = p.add_run(f"📋 {name}")
+    set_run_font(run, bold=True, size=12, color=(0, 102, 153))
+    doc.add_paragraph(f"Maqsad: {desc}", style='List Bullet')
+    doc.add_paragraph(f"Maydonlar: {fields}", style='List Bullet')
+    doc.add_paragraph()
+
+add_heading_custom(doc, "5.2. SQL Jadvallar Yaratish Skripti", 2)
+
+sql_code = """
+-- Foydalanuvchilar jadvali
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id BIGINT UNIQUE NOT NULL,
+    username VARCHAR(50),
+    full_name VARCHAR(200),
+    phone VARCHAR(20),
+    language VARCHAR(10) DEFAULT 'uz',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT 1
+);
+
+-- Kompaniyalar jadvali
+CREATE TABLE IF NOT EXISTS companies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name VARCHAR(300) NOT NULL,
+    stir VARCHAR(20) UNIQUE,
+    address TEXT,
+    director_name VARCHAR(200),
+    accountant_name VARCHAR(200),
+    tax_regime VARCHAR(50) DEFAULT 'general', -- general, simplified, simplified_vat
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Xodimlar jadvali
+CREATE TABLE IF NOT EXISTS employees (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    full_name VARCHAR(200) NOT NULL,
+    position VARCHAR(200),
+    passport VARCHAR(20),
+    pinfl VARCHAR(20),
+    salary DECIMAL(15,2) DEFAULT 0,
+    hire_date DATE,
+    is_active BOOLEAN DEFAULT 1,
+    FOREIGN KEY (company_id) REFERENCES companies(id)
+);
+
+-- Ish haqi hisobotlari
+CREATE TABLE IF NOT EXISTS salary_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    gross_total DECIMAL(15,2) DEFAULT 0,
+    deductions_total DECIMAL(15,2) DEFAULT 0,
+    net_total DECIMAL(15,2) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES companies(id)
+);
+
+-- Ish haqi tafsilotlari
+CREATE TABLE IF NOT EXISTS salary_details (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_id INTEGER NOT NULL,
+    employee_id INTEGER NOT NULL,
+    gross_salary DECIMAL(15,2) DEFAULT 0,
+    jshds DECIMAL(15,2) DEFAULT 0,
+    social_insurance DECIMAL(15,2) DEFAULT 0,
+    unemployment DECIMAL(15,2) DEFAULT 0,
+    housing DECIMAL(15,2) DEFAULT 0,
+    inces DECIMAL(15,2) DEFAULT 0,
+    pension DECIMAL(15,2) DEFAULT 0,
+    net_salary DECIMAL(15,2) DEFAULT 0,
+    FOREIGN KEY (report_id) REFERENCES salary_reports(id),
+    FOREIGN KEY (employee_id) REFERENCES employees(id)
+);
+
+-- Buxgalteriya provodkalari
+CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER NOT NULL,
+    date DATE NOT NULL,
+    debit_account VARCHAR(10) NOT NULL,
+    credit_account VARCHAR(10) NOT NULL,
+    amount DECIMAL(15,2) NOT NULL,
+    description TEXT,
+    document_ref VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES companies(id)
+);
+"""
+
+p = doc.add_paragraph()
+run = p.add_run(sql_code)
+set_run_font(run, font_name='Consolas', size=9)
+
+print("Part 2 done")
+
+
+
+
+# ============================================
+# 6. Modullar Tavsifi va Kod Namunalari
+# ============================================
+doc.add_page_break()
+add_heading_custom(doc, "6. Modullar Tavsifi va Kod Namunalari", 1)
+
+add_heading_custom(doc, "6.1. config.py — Konfiguratsiya", 2)
+doc.add_paragraph("Bot tokeni, ma'lumotlar bazasi yo'li va boshqa sozlamalarni saqlaydi.")
+
+config_code = '''import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class Config:
+    BOT_TOKEN = os.getenv('BOT_TOKEN')
+    DATABASE_PATH = os.getenv('DATABASE_PATH', 'data/accounting.db')
+    OUTPUT_DIR = os.getenv('OUTPUT_DIR', 'outputs')
+    LOG_FILE = os.getenv('LOG_FILE', 'logs/bot.log')
+    
+    # Soliq stavkalari (2026)
+    VAT_RATE = 0.12                    # QQS
+    PIT_RATE = 0.12                    # JSHDS
+    SOCIAL_TAX_EMPLOYER = 0.12       # Ijtimoiy soliq (ish beruvchi)
+    PENSION_FUND_EMPLOYER = 0.001    # Pensiya jamg'armasi (ish beruvchi 0.1%)
+    
+    # Xodim ushlanmalari
+    SOCIAL_INSURANCE_EMP = 0.04      # Ijtimoiy sug'urta
+    UNEMPLOYMENT_EMP = 0.005         # Ishsizlik sug'urtasi
+    HOUSING_EMP = 0.01               # Uy-joy jamg'armasi
+    INCES_EMP = 0.005                # Kasbiy ta'lim
+    
+    # Soliqdan ozod minimum (1.5 * MKIH)
+    TAX_FREE_MINIMUM = 1_650_000     # 2026-yil uchun taxminan
+    
+    # Foyda solig'i
+    PROFIT_TAX_RATE = 0.15           # Standart
+    PROFIT_TAX_BANK = 0.20           # Banklar uchun
+    
+    # Aylanma soliq
+    TURNOVER_TAX_STANDARD = 0.04     # Soddalashtirilgan
+    TURNOVER_TAX_PREFERENTIAL = 0.01 # Imtiyozli
+    SIMPLIFIED_VAT = 0.06            # 6% QQS rejimi
+    
+    # Mol-mulk va yer solig'i
+    PROPERTY_TAX = 0.015
+    LAND_TAX_AGRICULTURE = 0.0095
+'''
+p = doc.add_paragraph()
+run = p.add_run(config_code)
+set_run_font(run, font_name='Consolas', size=9)
+
+add_heading_custom(doc, "6.2. accounting_engine.py — Hisoblash Dvigateli", 2)
+doc.add_paragraph("Barcha soliq va buxgalteriya hisob-kitoblarini amalga oshiruvchi asosiy modul.")
+
+engine_code = '''from config import Config
+from decimal import Decimal, ROUND_HALF_UP
+
+class UzbekTaxCalculator:
+    """O'zbekiston soliq va buxgalteriya hisoblash dvigateli"""
+    
+    def __init__(self):
+        self.config = Config()
+    
+    def calculate_salary(self, gross_salary: float, tax_regime: str = 'general') -> dict:
+        """
+        Ish haqi hisoblash
+        
+        Args:
+            gross_salary: Yalpi ish haqi (so'm)
+            tax_regime: Soliq rejimi
+            
+        Returns:
+            dict: Barcha ushlanmalar va sof ish haqi
+        """
+        gross = Decimal(str(gross_salary))
+        tax_free = Decimal(str(self.config.TAX_FREE_MINIMUM))
+        
+        # Soliq solinadigan qism
+        taxable_amount = max(gross - tax_free, Decimal('0'))
+        
+        # JSHDS (12%)
+        jshds = (taxable_amount * Decimal(str(self.config.PIT_RATE))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        
+        # Ijtimoiy sug'urta (4%)
+        social_insurance = (gross * Decimal(str(self.config.SOCIAL_INSURANCE_EMP))).quantize(Decimal('0.01'))
+        
+        # Ishsizlik sug'urtasi (0.5%)
+        unemployment = (gross * Decimal(str(self.config.UNEMPLOYMENT_EMP))).quantize(Decimal('0.01'))
+        
+        # Uy-joy jamg'armasi (1%)
+        housing = (gross * Decimal(str(self.config.HOUSING_EMP))).quantize(Decimal('0.01'))
+        
+        # INCES kasbiy ta'lim (0.5%)
+        inces = (gross * Decimal(str(self.config.INCES_EMP))).quantize(Decimal('0.01'))
+        
+        # Jami ushlanmalar
+        total_deductions = jshds + social_insurance + unemployment + housing + inces
+        
+        # Sof ish haqi
+        net_salary = gross - total_deductions
+        
+        return {
+            'gross_salary': float(gross),
+            'tax_free_amount': float(tax_free),
+            'taxable_amount': float(taxable_amount),
+            'jshds': float(jshds),
+            'social_insurance': float(social_insurance),
+            'unemployment': float(unemployment),
+            'housing': float(housing),
+            'inces': float(inces),
+            'total_deductions': float(total_deductions),
+            'net_salary': float(net_salary),
+            'deduction_rate': float(total_deductions / gross * 100) if gross > 0 else 0
+        }
+    
+    def calculate_employer_costs(self, gross_salary: float) -> dict:
+        """Ish beruvchi to'lovlari"""
+        gross = Decimal(str(gross_salary))
+        
+        # Ijtimoiy soliq (12%)
+        social_tax = (gross * Decimal(str(self.config.SOCIAL_TAX_EMPLOYER))).quantize(Decimal('0.01'))
+        
+        # Pensiya jamg'armasi (0.1%)
+        pension_fund = (gross * Decimal(str(self.config.PENSION_FUND_EMPLOYER))).quantize(Decimal('0.01'))
+        
+        total = gross + social_tax + pension_fund
+        
+        return {
+            'gross_salary': float(gross),
+            'social_tax': float(social_tax),
+            'pension_fund': float(pension_fund),
+            'total_cost': float(total),
+            'employer_rate': float((social_tax + pension_fund) / gross * 100) if gross > 0 else 0
+        }
+    
+    def calculate_vat(self, amount: float, include_vat: bool = True) -> dict:
+        """QQS hisoblash"""
+        if include_vat:
+            # QQSni ajratish (12%)
+            vat_amount = (Decimal(str(amount)) * Decimal('0.12') / Decimal('1.12')).quantize(Decimal('0.01'))
+            base_amount = Decimal(str(amount)) - vat_amount
+        else:
+            # QQS qo'shish
+            base_amount = Decimal(str(amount))
+            vat_amount = (base_amount * Decimal('0.12')).quantize(Decimal('0.01'))
+            
+        return {
+            'base_amount': float(base_amount),
+            'vat_amount': float(vat_amount),
+            'total_amount': float(base_amount + vat_amount),
+            'vat_rate': 12
+        }
+    
+    def calculate_turnover_tax(self, turnover: float, regime: str = 'standard') -> dict:
+        """Aylanma solig'i hisoblash"""
+        t = Decimal(str(turnover))
+        
+        if regime == 'preferential':
+            rate = Decimal(str(self.config.TURNOVER_TAX_PREFERENTIAL))
+        elif regime == 'simplified_vat':
+            rate = Decimal(str(self.config.SIMPLIFIED_VAT))
+        else:
+            rate = Decimal(str(self.config.TURNOVER_TAX_STANDARD))
+            
+        tax = (t * rate).quantize(Decimal('0.01'))
+        
+        return {
+            'turnover': float(t),
+            'tax_amount': float(tax),
+            'rate': float(rate * 100),
+            'regime': regime
+        }
+    
+    def calculate_profit_tax(self, profit: float, is_bank: bool = False) -> dict:
+        """Foyda solig'i hisoblash"""
+        p = Decimal(str(profit))
+        rate = Decimal(str(self.config.PROFIT_TAX_BANK if is_bank else self.config.PROFIT_TAX_RATE))
+        tax = (p * rate).quantize(Decimal('0.01'))
+        
+        return {
+            'profit': float(p),
+            'tax_amount': float(tax),
+            'rate': float(rate * 100),
+            'net_profit': float(p - tax)
+        }
+    
+    def generate_salary_entries(self, employee_id: int, gross: float, month: int, year: int) -> list:
+        """Ish haqi provodkalarini yaratish"""
+        calc = self.calculate_salary(gross)
+        employer = self.calculate_employer_costs(gross)
+        
+        entries = [
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '9010',
+                'credit': '6710',
+                'amount': gross,
+                'description': f'Ish haqi hisoblandi (xodim ID: {employee_id})'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '6710',
+                'credit': '6820',
+                'amount': calc['jshds'],
+                'description': 'JSHDS ushlandi'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '6710',
+                'credit': '6910',
+                'amount': calc['social_insurance'],
+                'description': 'Ijtimoiy sug\'urta ushlandi'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '6710',
+                'credit': '6920',
+                'amount': calc['unemployment'],
+                'description': 'Ishsizlik sug\'urtasi ushlandi'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '6710',
+                'credit': '6940',
+                'amount': calc['housing'],
+                'description': 'Uy-joy jamg\'armasi ushlandi'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '6710',
+                'credit': '6950',
+                'amount': calc['inces'],
+                'description': 'INCES kasbiy ta\'lim ushlandi'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '9010',
+                'credit': '6830',
+                'amount': employer['social_tax'],
+                'description': 'Ish beruvchi ijtimoiy solig\'i'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '9010',
+                'credit': '6930',
+                'amount': employer['pension_fund'],
+                'description': 'Ish beruvchi pensiya jamg\'armasi'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '6710',
+                'credit': '5010',
+                'amount': calc['net_salary'],
+                'description': 'Ish haqi kassadan to\'landi'
+            }
+        ]
+        
+        return entries
+'''
+p = doc.add_paragraph()
+run = p.add_run(engine_code)
+set_run_font(run, font_name='Consolas', size=9)
+
+add_heading_custom(doc, "6.3. database.py — Ma'lumotlar Bazasi", 2)
+doc.add_paragraph("SQLite bilan ishlash, CRUD operatsiyalari va hisobotlarni saqlash.")
+
+db_code = '''import sqlite3
+from datetime import datetime
+from contextlib import contextmanager
+from config import Config
+
+class Database:
+    def __init__(self):
+        self.db_path = Config.DATABASE_PATH
+        self._init_db()
+    
+    @contextmanager
+    def _get_connection(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
+    
+    def _init_db(self):
+        """Ma'lumotlar bazasini ishga tushirish"""
+        with self._get_connection() as conn:
+            conn.executescript('''
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    telegram_id BIGINT UNIQUE NOT NULL,
+                    username TEXT,
+                    full_name TEXT,
+                    phone TEXT,
+                    language TEXT DEFAULT 'uz',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_active INTEGER DEFAULT 1
+                );
+                
+                CREATE TABLE IF NOT EXISTS companies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    stir TEXT UNIQUE,
+                    address TEXT,
+                    director_name TEXT,
+                    accountant_name TEXT,
+                    tax_regime TEXT DEFAULT 'general',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS employees (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL,
+                    full_name TEXT NOT NULL,
+                    position TEXT,
+                    passport TEXT,
+                    pinfl TEXT,
+                    salary REAL DEFAULT 0,
+                    hire_date TEXT,
+                    is_active INTEGER DEFAULT 1,
+                    FOREIGN KEY (company_id) REFERENCES companies(id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS salary_reports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL,
+                    month INTEGER NOT NULL,
+                    year INTEGER NOT NULL,
+                    gross_total REAL DEFAULT 0,
+                    deductions_total REAL DEFAULT 0,
+                    net_total REAL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (company_id) REFERENCES companies(id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS salary_details (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    report_id INTEGER NOT NULL,
+                    employee_id INTEGER NOT NULL,
+                    gross_salary REAL DEFAULT 0,
+                    jshds REAL DEFAULT 0,
+                    social_insurance REAL DEFAULT 0,
+                    unemployment REAL DEFAULT 0,
+                    housing REAL DEFAULT 0,
+                    inces REAL DEFAULT 0,
+                    pension REAL DEFAULT 0,
+                    net_salary REAL DEFAULT 0,
+                    FOREIGN KEY (report_id) REFERENCES salary_reports(id),
+                    FOREIGN KEY (employee_id) REFERENCES employees(id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL,
+                    date TEXT NOT NULL,
+                    debit_account TEXT NOT NULL,
+                    credit_account TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    description TEXT,
+                    document_ref TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (company_id) REFERENCES companies(id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS documents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL,
+                    doc_type TEXT NOT NULL,
+                    file_path TEXT NOT NULL,
+                    file_name TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT DEFAULT 'active',
+                    FOREIGN KEY (company_id) REFERENCES companies(id)
+                );
+            ''')
+            conn.commit()
+    
+    def add_user(self, telegram_id, username=None, full_name=None, phone=None, language='uz'):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                '''INSERT OR REPLACE INTO users 
+                   (telegram_id, username, full_name, phone, language) 
+                   VALUES (?, ?, ?, ?, ?)''',
+                (telegram_id, username, full_name, phone, language)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    
+    def get_user(self, telegram_id):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                'SELECT * FROM users WHERE telegram_id = ?', (telegram_id,)
+            )
+            return dict(cursor.fetchone()) if cursor.fetchone else None
+    
+    def add_company(self, user_id, name, stir=None, address=None, 
+                    director_name=None, accountant_name=None, tax_regime='general'):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                '''INSERT INTO companies 
+                   (user_id, name, stir, address, director_name, accountant_name, tax_regime)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                (user_id, name, stir, address, director_name, accountant_name, tax_regime)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    
+    def get_user_companies(self, user_id):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                'SELECT * FROM companies WHERE user_id = ?', (user_id,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def add_employee(self, company_id, full_name, position=None, passport=None, 
+                     pinfl=None, salary=0, hire_date=None):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                '''INSERT INTO employees 
+                   (company_id, full_name, position, passport, pinfl, salary, hire_date)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                (company_id, full_name, position, passport, pinfl, salary, hire_date)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    
+    def get_company_employees(self, company_id):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                'SELECT * FROM employees WHERE company_id = ? AND is_active = 1', 
+                (company_id,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def save_salary_report(self, company_id, month, year, details):
+        """Ish haqi hisobotini saqlash"""
+        with self._get_connection() as conn:
+            gross_total = sum(d['gross_salary'] for d in details)
+            deductions_total = sum(d['total_deductions'] for d in details)
+            net_total = sum(d['net_salary'] for d in details)
+            
+            cursor = conn.execute(
+                '''INSERT INTO salary_reports 
+                   (company_id, month, year, gross_total, deductions_total, net_total)
+                   VALUES (?, ?, ?, ?, ?, ?)''',
+                (company_id, month, year, gross_total, deductions_total, net_total)
+            )
+            report_id = cursor.lastrowid
+            
+            for detail in details:
+                conn.execute(
+                    '''INSERT INTO salary_details 
+                       (report_id, employee_id, gross_salary, jshds, social_insurance,
+                        unemployment, housing, inces, pension, net_salary)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (report_id, detail.get('employee_id', 0), detail['gross_salary'],
+                     detail['jshds'], detail['social_insurance'], detail['unemployment'],
+                     detail['housing'], detail['inces'], detail.get('pension', 0),
+                     detail['net_salary'])
+                )
+            
+            conn.commit()
+            return report_id
+    
+    def save_transaction(self, company_id, date, debit, credit, amount, description='', doc_ref=''):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                '''INSERT INTO transactions 
+                   (company_id, date, debit_account, credit_account, amount, description, document_ref)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)''',
+                (company_id, date, debit, credit, amount, description, doc_ref)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    
+    def save_document(self, company_id, doc_type, file_path, file_name):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                '''INSERT INTO documents (company_id, doc_type, file_path, file_name)
+                   VALUES (?, ?, ?, ?)''',
+                (company_id, doc_type, file_path, file_name)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    
+    def get_salary_history(self, company_id, limit=12):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                '''SELECT * FROM salary_reports 
+                   WHERE company_id = ? 
+                   ORDER BY year DESC, month DESC 
+                   LIMIT ?''',
+                (company_id, limit)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+'''
+p = doc.add_paragraph()
+run = p.add_run(db_code)
+set_run_font(run, font_name='Consolas', size=9)
+
+print("Part 3 done")
+
+
+
+
+
+# ============================================
+# 6. Modullar Tavsifi va Kod Namunalari
+# ============================================
+doc.add_page_break()
+add_heading_custom(doc, "6. Modullar Tavsifi va Kod Namunalari", 1)
+
+add_heading_custom(doc, "6.1. config.py — Konfiguratsiya", 2)
+doc.add_paragraph("Bot tokeni, ma'lumotlar bazasi yo'li va boshqa sozlamalarni saqlaydi.")
+
+config_code = """import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class Config:
+    BOT_TOKEN = os.getenv('BOT_TOKEN')
+    DATABASE_PATH = os.getenv('DATABASE_PATH', 'data/accounting.db')
+    OUTPUT_DIR = os.getenv('OUTPUT_DIR', 'outputs')
+    LOG_FILE = os.getenv('LOG_FILE', 'logs/bot.log')
+    
+    # Soliq stavkalari (2026)
+    VAT_RATE = 0.12                    # QQS
+    PIT_RATE = 0.12                    # JSHDS
+    SOCIAL_TAX_EMPLOYER = 0.12       # Ijtimoiy soliq (ish beruvchi)
+    PENSION_FUND_EMPLOYER = 0.001    # Pensiya jamg'armasi (ish beruvchi 0.1%)
+    
+    # Xodim ushlanmalari
+    SOCIAL_INSURANCE_EMP = 0.04      # Ijtimoiy sug'urta
+    UNEMPLOYMENT_EMP = 0.005         # Ishsizlik sug'urtasi
+    HOUSING_EMP = 0.01               # Uy-joy jamg'armasi
+    INCES_EMP = 0.005                # Kasbiy ta'lim
+    
+    # Soliqdan ozod minimum (1.5 * MKIH)
+    TAX_FREE_MINIMUM = 1_650_000     # 2026-yil uchun taxminan
+    
+    # Foyda solig'i
+    PROFIT_TAX_RATE = 0.15           # Standart
+    PROFIT_TAX_BANK = 0.20           # Banklar uchun
+    
+    # Aylanma soliq
+    TURNOVER_TAX_STANDARD = 0.04     # Soddalashtirilgan
+    TURNOVER_TAX_PREFERENTIAL = 0.01 # Imtiyozli
+    SIMPLIFIED_VAT = 0.06            # 6% QQS rejimi
+    
+    # Mol-mulk va yer solig'i
+    PROPERTY_TAX = 0.015
+    LAND_TAX_AGRICULTURE = 0.0095
+"""
+p = doc.add_paragraph()
+run = p.add_run(config_code)
+set_run_font(run, font_name='Consolas', size=9)
+
+add_heading_custom(doc, "6.2. accounting_engine.py — Hisoblash Dvigateli", 2)
+doc.add_paragraph("Barcha soliq va buxgalteriya hisob-kitoblarini amalga oshiruvchi asosiy modul.")
+
+engine_code = """from config import Config
+from decimal import Decimal, ROUND_HALF_UP
+
+class UzbekTaxCalculator:
+    \"\"\"O'zbekiston soliq va buxgalteriya hisoblash dvigateli\"\"\"
+    
+    def __init__(self):
+        self.config = Config()
+    
+    def calculate_salary(self, gross_salary: float, tax_regime: str = 'general') -> dict:
+        \"\"\"
+        Ish haqi hisoblash
+        
+        Args:
+            gross_salary: Yalpi ish haqi (so'm)
+            tax_regime: Soliq rejimi
+            
+        Returns:
+            dict: Barcha ushlanmalar va sof ish haqi
+        \"\"\"
+        gross = Decimal(str(gross_salary))
+        tax_free = Decimal(str(self.config.TAX_FREE_MINIMUM))
+        
+        # Soliq solinadigan qism
+        taxable_amount = max(gross - tax_free, Decimal('0'))
+        
+        # JSHDS (12%)
+        jshds = (taxable_amount * Decimal(str(self.config.PIT_RATE))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        
+        # Ijtimoiy sug'urta (4%)
+        social_insurance = (gross * Decimal(str(self.config.SOCIAL_INSURANCE_EMP))).quantize(Decimal('0.01'))
+        
+        # Ishsizlik sug'urtasi (0.5%)
+        unemployment = (gross * Decimal(str(self.config.UNEMPLOYMENT_EMP))).quantize(Decimal('0.01'))
+        
+        # Uy-joy jamg'armasi (1%)
+        housing = (gross * Decimal(str(self.config.HOUSING_EMP))).quantize(Decimal('0.01'))
+        
+        # INCES kasbiy ta'lim (0.5%)
+        inces = (gross * Decimal(str(self.config.INCES_EMP))).quantize(Decimal('0.01'))
+        
+        # Jami ushlanmalar
+        total_deductions = jshds + social_insurance + unemployment + housing + inces
+        
+        # Sof ish haqi
+        net_salary = gross - total_deductions
+        
+        return {
+            'gross_salary': float(gross),
+            'tax_free_amount': float(tax_free),
+            'taxable_amount': float(taxable_amount),
+            'jshds': float(jshds),
+            'social_insurance': float(social_insurance),
+            'unemployment': float(unemployment),
+            'housing': float(housing),
+            'inces': float(inces),
+            'total_deductions': float(total_deductions),
+            'net_salary': float(net_salary),
+            'deduction_rate': float(total_deductions / gross * 100) if gross > 0 else 0
+        }
+    
+    def calculate_employer_costs(self, gross_salary: float) -> dict:
+        \"\"\"Ish beruvchi to'lovlari\"\"\"
+        gross = Decimal(str(gross_salary))
+        
+        # Ijtimoiy soliq (12%)
+        social_tax = (gross * Decimal(str(self.config.SOCIAL_TAX_EMPLOYER))).quantize(Decimal('0.01'))
+        
+        # Pensiya jamg'armasi (0.1%)
+        pension_fund = (gross * Decimal(str(self.config.PENSION_FUND_EMPLOYER))).quantize(Decimal('0.01'))
+        
+        total = gross + social_tax + pension_fund
+        
+        return {
+            'gross_salary': float(gross),
+            'social_tax': float(social_tax),
+            'pension_fund': float(pension_fund),
+            'total_cost': float(total),
+            'employer_rate': float((social_tax + pension_fund) / gross * 100) if gross > 0 else 0
+        }
+    
+    def calculate_vat(self, amount: float, include_vat: bool = True) -> dict:
+        \"\"\"QQS hisoblash\"\"\"
+        if include_vat:
+            # QQSni ajratish (12%)
+            vat_amount = (Decimal(str(amount)) * Decimal('0.12') / Decimal('1.12')).quantize(Decimal('0.01'))
+            base_amount = Decimal(str(amount)) - vat_amount
+        else:
+            # QQS qo'shish
+            base_amount = Decimal(str(amount))
+            vat_amount = (base_amount * Decimal('0.12')).quantize(Decimal('0.01'))
+            
+        return {
+            'base_amount': float(base_amount),
+            'vat_amount': float(vat_amount),
+            'total_amount': float(base_amount + vat_amount),
+            'vat_rate': 12
+        }
+    
+    def calculate_turnover_tax(self, turnover: float, regime: str = 'standard') -> dict:
+        \"\"\"Aylanma solig'i hisoblash\"\"\"
+        t = Decimal(str(turnover))
+        
+        if regime == 'preferential':
+            rate = Decimal(str(self.config.TURNOVER_TAX_PREFERENTIAL))
+        elif regime == 'simplified_vat':
+            rate = Decimal(str(self.config.SIMPLIFIED_VAT))
+        else:
+            rate = Decimal(str(self.config.TURNOVER_TAX_STANDARD))
+            
+        tax = (t * rate).quantize(Decimal('0.01'))
+        
+        return {
+            'turnover': float(t),
+            'tax_amount': float(tax),
+            'rate': float(rate * 100),
+            'regime': regime
+        }
+    
+    def calculate_profit_tax(self, profit: float, is_bank: bool = False) -> dict:
+        \"\"\"Foyda solig'i hisoblash\"\"\"
+        p = Decimal(str(profit))
+        rate = Decimal(str(self.config.PROFIT_TAX_BANK if is_bank else self.config.PROFIT_TAX_RATE))
+        tax = (p * rate).quantize(Decimal('0.01'))
+        
+        return {
+            'profit': float(p),
+            'tax_amount': float(tax),
+            'rate': float(rate * 100),
+            'net_profit': float(p - tax)
+        }
+    
+    def generate_salary_entries(self, employee_id: int, gross: float, month: int, year: int) -> list:
+        \"\"\"Ish haqi provodkalarini yaratish\"\"\"
+        calc = self.calculate_salary(gross)
+        employer = self.calculate_employer_costs(gross)
+        
+        entries = [
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '9010',
+                'credit': '6710',
+                'amount': gross,
+                'description': f'Ish haqi hisoblandi (xodim ID: {employee_id})'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '6710',
+                'credit': '6820',
+                'amount': calc['jshds'],
+                'description': 'JSHDS ushlandi'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '6710',
+                'credit': '6910',
+                'amount': calc['social_insurance'],
+                'description': 'Ijtimoiy sug\'urta ushlandi'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '6710',
+                'credit': '6920',
+                'amount': calc['unemployment'],
+                'description': 'Ishsizlik sug\'urtasi ushlandi'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '6710',
+                'credit': '6940',
+                'amount': calc['housing'],
+                'description': 'Uy-joy jamg\'armasi ushlandi'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '6710',
+                'credit': '6950',
+                'amount': calc['inces'],
+                'description': 'INCES kasbiy ta\'lim ushlandi'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '9010',
+                'credit': '6830',
+                'amount': employer['social_tax'],
+                'description': 'Ish beruvchi ijtimoiy solig\'i'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '9010',
+                'credit': '6930',
+                'amount': employer['pension_fund'],
+                'description': 'Ish beruvchi pensiya jamg\'armasi'
+            },
+            {
+                'date': f'{year}-{month:02d}-01',
+                'debit': '6710',
+                'credit': '5010',
+                'amount': calc['net_salary'],
+                'description': 'Ish haqi kassadan to\'landi'
+            }
+        ]
+        
+        return entries
+"""
+p = doc.add_paragraph()
+run = p.add_run(engine_code)
+set_run_font(run, font_name='Consolas', size=9)
+
+print("Part 3 done")
+
+
+
+
+
+
+
+
+# ============================================
+# 6.3 database.py
+# ============================================
+add_heading_custom(doc, "6.3. database.py — Ma'lumotlar Bazasi", 2)
+doc.add_paragraph("SQLite bilan ishlash, CRUD operatsiyalari va hisobotlarni saqlash.")
+
+db_code = """import sqlite3
+from datetime import datetime
+from contextlib import contextmanager
+from config import Config
+
+class Database:
+    def __init__(self):
+        self.db_path = Config.DATABASE_PATH
+        self._init_db()
+    
+    @contextmanager
+    def _get_connection(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
+    
+    def _init_db(self):
+        with self._get_connection() as conn:
+            conn.executescript(\'\'\'
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    telegram_id BIGINT UNIQUE NOT NULL,
+                    username TEXT,
+                    full_name TEXT,
+                    phone TEXT,
+                    language TEXT DEFAULT 'uz',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_active INTEGER DEFAULT 1
+                );
+                
+                CREATE TABLE IF NOT EXISTS companies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    stir TEXT UNIQUE,
+                    address TEXT,
+                    director_name TEXT,
+                    accountant_name TEXT,
+                    tax_regime TEXT DEFAULT 'general',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS employees (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL,
+                    full_name TEXT NOT NULL,
+                    position TEXT,
+                    passport TEXT,
+                    pinfl TEXT,
+                    salary REAL DEFAULT 0,
+                    hire_date TEXT,
+                    is_active INTEGER DEFAULT 1,
+                    FOREIGN KEY (company_id) REFERENCES companies(id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS salary_reports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL,
+                    month INTEGER NOT NULL,
+                    year INTEGER NOT NULL,
+                    gross_total REAL DEFAULT 0,
+                    deductions_total REAL DEFAULT 0,
+                    net_total REAL DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (company_id) REFERENCES companies(id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS salary_details (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    report_id INTEGER NOT NULL,
+                    employee_id INTEGER NOT NULL,
+                    gross_salary REAL DEFAULT 0,
+                    jshds REAL DEFAULT 0,
+                    social_insurance REAL DEFAULT 0,
+                    unemployment REAL DEFAULT 0,
+                    housing REAL DEFAULT 0,
+                    inces REAL DEFAULT 0,
+                    pension REAL DEFAULT 0,
+                    net_salary REAL DEFAULT 0,
+                    FOREIGN KEY (report_id) REFERENCES salary_reports(id),
+                    FOREIGN KEY (employee_id) REFERENCES employees(id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL,
+                    date TEXT NOT NULL,
+                    debit_account TEXT NOT NULL,
+                    credit_account TEXT NOT NULL,
+                    amount REAL NOT NULL,
+                    description TEXT,
+                    document_ref TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (company_id) REFERENCES companies(id)
+                );
+                
+                CREATE TABLE IF NOT EXISTS documents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL,
+                    doc_type TEXT NOT NULL,
+                    file_path TEXT NOT NULL,
+                    file_name TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT DEFAULT 'active',
+                    FOREIGN KEY (company_id) REFERENCES companies(id)
+                );
+            \'\'\')
+            conn.commit()
+    
+    def add_user(self, telegram_id, username=None, full_name=None, phone=None, language='uz'):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                \"\"\"INSERT OR REPLACE INTO users 
+                   (telegram_id, username, full_name, phone, language) 
+                   VALUES (?, ?, ?, ?, ?)\"\"\",
+                (telegram_id, username, full_name, phone, language)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    
+    def get_user(self, telegram_id):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                'SELECT * FROM users WHERE telegram_id = ?', (telegram_id,)
+            )
+            row = cursor.fetchone()
+            return dict(row) if row else None
+    
+    def add_company(self, user_id, name, stir=None, address=None, 
+                    director_name=None, accountant_name=None, tax_regime='general'):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                \"\"\"INSERT INTO companies 
+                   (user_id, name, stir, address, director_name, accountant_name, tax_regime)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)\"\"\",
+                (user_id, name, stir, address, director_name, accountant_name, tax_regime)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    
+    def get_user_companies(self, user_id):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                'SELECT * FROM companies WHERE user_id = ?', (user_id,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def add_employee(self, company_id, full_name, position=None, passport=None, 
+                     pinfl=None, salary=0, hire_date=None):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                \"\"\"INSERT INTO employees 
+                   (company_id, full_name, position, passport, pinfl, salary, hire_date)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)\"\"\",
+                (company_id, full_name, position, passport, pinfl, salary, hire_date)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    
+    def get_company_employees(self, company_id):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                'SELECT * FROM employees WHERE company_id = ? AND is_active = 1', 
+                (company_id,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+    
+    def save_salary_report(self, company_id, month, year, details):
+        with self._get_connection() as conn:
+            gross_total = sum(d['gross_salary'] for d in details)
+            deductions_total = sum(d['total_deductions'] for d in details)
+            net_total = sum(d['net_salary'] for d in details)
+            
+            cursor = conn.execute(
+                \"\"\"INSERT INTO salary_reports 
+                   (company_id, month, year, gross_total, deductions_total, net_total)
+                   VALUES (?, ?, ?, ?, ?, ?)\"\"\",
+                (company_id, month, year, gross_total, deductions_total, net_total)
+            )
+            report_id = cursor.lastrowid
+            
+            for detail in details:
+                conn.execute(
+                    \"\"\"INSERT INTO salary_details 
+                       (report_id, employee_id, gross_salary, jshds, social_insurance,
+                        unemployment, housing, inces, pension, net_salary)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\"\"\",
+                    (report_id, detail.get('employee_id', 0), detail['gross_salary'],
+                     detail['jshds'], detail['social_insurance'], detail['unemployment'],
+                     detail['housing'], detail['inces'], detail.get('pension', 0),
+                     detail['net_salary'])
+                )
+            
+            conn.commit()
+            return report_id
+    
+    def save_transaction(self, company_id, date, debit, credit, amount, description='', doc_ref=''):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                \"\"\"INSERT INTO transactions 
+                   (company_id, date, debit_account, credit_account, amount, description, document_ref)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)\"\"\",
+                (company_id, date, debit, credit, amount, description, doc_ref)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    
+    def save_document(self, company_id, doc_type, file_path, file_name):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                \"\"\"INSERT INTO documents (company_id, doc_type, file_path, file_name)
+                   VALUES (?, ?, ?, ?)\"\"\",
+                (company_id, doc_type, file_path, file_name)
+            )
+            conn.commit()
+            return cursor.lastrowid
+    
+    def get_salary_history(self, company_id, limit=12):
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                \"\"\"SELECT * FROM salary_reports 
+                   WHERE company_id = ? 
+                   ORDER BY year DESC, month DESC 
+                   LIMIT ?\"\"\",
+                (company_id, limit)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+"""
+p = doc.add_paragraph()
+run = p.add_run(db_code)
+set_run_font(run, font_name='Consolas', size=9)
+
+print("Part 4 done")
+
+
+
+
+
+
+
+# ============================================
+# 6.4 excel_processor.py
+# ============================================
+add_heading_custom(doc, "6.4. excel_processor.py — Excel Generatori", 2)
+doc.add_paragraph("Professional dizayndagi Excel hisobotlarini yaratish. openpyxl kutubxonasi ishlatiladi.")
+
+excel_code = """import os
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
+from datetime import datetime
+from config import Config
+
+class ExcelProcessor:
+    def __init__(self):
+        self.output_dir = Config.OUTPUT_DIR + '/excel'
+        os.makedirs(self.output_dir, exist_ok=True)
+        
+        # Uslublar
+        self.header_fill = PatternFill(start_color='1F4E79', end_color='1F4E79', fill_type='solid')
+        self.header_font = Font(name='Calibri', size=12, bold=True, color='FFFFFF')
+        self.subheader_fill = PatternFill(start_color='2E75B6', end_color='2E75B6', fill_type='solid')
+        self.subheader_font = Font(name='Calibri', size=11, bold=True, color='FFFFFF')
+        self.data_font = Font(name='Calibri', size=11)
+        self.money_font = Font(name='Calibri', size=11)
+        self.total_fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
+        self.total_font = Font(name='Calibri', size=11, bold=True)
+        
+        self.thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+    
+    def _apply_header_style(self, cell):
+        cell.fill = self.header_fill
+        cell.font = self.header_font
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border = self.thin_border
+    
+    def _apply_data_style(self, cell, is_money=False, is_total=False):
+        cell.font = self.total_font if is_total else self.data_font
+        cell.border = self.thin_border
+        cell.alignment = Alignment(horizontal='left' if not is_money else 'right', vertical='center')
+        if is_money:
+            cell.number_format = '#,##0.00 "so\'m"'
+        if is_total:
+            cell.fill = self.total_fill
+    
+    def create_salary_report(self, company_name, month, year, employees_data, output_filename=None):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Ish Haqi Vedomosti"
+        
+        # Sarlavha
+        ws.merge_cells('A1:J1')
+        title_cell = ws['A1']
+        title_cell.value = f"{company_name} - {month}.{year} OYI ISH HAQI VEDOMOSTI"
+        title_cell.font = Font(name='Calibri', size=16, bold=True, color='1F4E79')
+        title_cell.alignment = Alignment(horizontal='center', vertical='center')
+        ws.row_dimensions[1].height = 30
+        
+        # Sana
+        ws.merge_cells('A2:J2')
+        date_cell = ws['A2']
+        date_cell.value = f"Tuzilgan sana: {datetime.now().strftime('%d.%m.%Y')}"
+        date_cell.font = Font(name='Calibri', size=10, italic=True)
+        date_cell.alignment = Alignment(horizontal='center')
+        
+        # Ustun sarlavhalari (4-qator)
+        headers = [
+            'T/R', 'F.I.Sh.', 'Lavozim', 'Yalpi ish haqi', 
+            'JSHDS (12%)', 'Ijtimoiy sug\'urta (4%)', 'Ishsizlik (0.5%)',
+            'Uy-joy (1%)', 'INCES (0.5%)', 'Sof ish haqi'
+        ]
+        
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=4, column=col, value=header)
+            self._apply_header_style(cell)
+        
+        ws.row_dimensions[4].height = 40
+        
+        # Ma'lumotlar
+        row = 5
+        total_gross = 0
+        total_jshds = 0
+        total_social = 0
+        total_unemployment = 0
+        total_housing = 0
+        total_inces = 0
+        total_net = 0
+        
+        for idx, emp in enumerate(employees_data, 1):
+            ws.cell(row=row, column=1, value=idx)
+            ws.cell(row=row, column=2, value=emp['full_name'])
+            ws.cell(row=row, column=3, value=emp.get('position', ''))
+            ws.cell(row=row, column=4, value=emp['gross_salary'])
+            ws.cell(row=row, column=5, value=emp['jshds'])
+            ws.cell(row=row, column=6, value=emp['social_insurance'])
+            ws.cell(row=row, column=7, value=emp['unemployment'])
+            ws.cell(row=row, column=8, value=emp['housing'])
+            ws.cell(row=row, column=9, value=emp['inces'])
+            ws.cell(row=row, column=10, value=emp['net_salary'])
+            
+            for col in range(1, 11):
+                self._apply_data_style(ws.cell(row=row, column=col), is_money=(col >= 4))
+            
+            total_gross += emp['gross_salary']
+            total_jshds += emp['jshds']
+            total_social += emp['social_insurance']
+            total_unemployment += emp['unemployment']
+            total_housing += emp['housing']
+            total_inces += emp['inces']
+            total_net += emp['net_salary']
+            row += 1
+        
+        # Jami qator
+        ws.cell(row=row, column=1, value='')
+        ws.cell(row=row, column=2, value='JAMI:')
+        ws.cell(row=row, column=3, value='')
+        ws.cell(row=row, column=4, value=total_gross)
+        ws.cell(row=row, column=5, value=total_jshds)
+        ws.cell(row=row, column=6, value=total_social)
+        ws.cell(row=row, column=7, value=total_unemployment)
+        ws.cell(row=row, column=8, value=total_housing)
+        ws.cell(row=row, column=9, value=total_inces)
+        ws.cell(row=row, column=10, value=total_net)
+        
+        for col in range(1, 11):
+            self._apply_data_style(ws.cell(row=row, column=col), is_money=(col >= 4), is_total=True)
+        
+        # Ustun kengliklari
+        ws.column_dimensions['A'].width = 6
+        ws.column_dimensions['B'].width = 25
+        ws.column_dimensions['C'].width = 20
+        for col in ['D', 'E', 'F', 'G', 'H', 'I', 'J']:
+            ws.column_dimensions[col].width = 18
+        
+        # Saqlash
+        if not output_filename:
+            output_filename = f"salary_{company_name.replace(' ', '_')}_{month:02d}_{year}.xlsx"
+        
+        filepath = os.path.join(self.output_dir, output_filename)
+        wb.save(filepath)
+        return filepath
+    
+    def create_turnover_report(self, company_name, month, year, transactions, output_filename=None):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Aylanma Hisoboti"
+        
+        ws.merge_cells('A1:H1')
+        ws['A1'] = f"{company_name} - {month}.{year} OYI OBOROT-SAL'DO QAYDNOMASI"
+        ws['A1'].font = Font(name='Calibri', size=16, bold=True, color='1F4E79')
+        ws['A1'].alignment = Alignment(horizontal='center')
+        ws.row_dimensions[1].height = 30
+        
+        headers = ['T/R', 'Sana', 'Debet', 'Kredit', 'Summa', 'Debet hisob', 'Kredit hisob', 'Izoh']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col, value=header)
+            self._apply_header_style(cell)
+        
+        row = 4
+        total = 0
+        for idx, tr in enumerate(transactions, 1):
+            ws.cell(row=row, column=1, value=idx)
+            ws.cell(row=row, column=2, value=tr['date'])
+            ws.cell(row=row, column=3, value=tr['debit_account'])
+            ws.cell(row=row, column=4, value=tr['credit_account'])
+            ws.cell(row=row, column=5, value=tr['amount'])
+            ws.cell(row=row, column=6, value=tr.get('debit_name', ''))
+            ws.cell(row=row, column=7, value=tr.get('credit_name', ''))
+            ws.cell(row=row, column=8, value=tr.get('description', ''))
+            
+            for col in range(1, 9):
+                self._apply_data_style(ws.cell(row=row, column=col), is_money=(col == 5))
+            
+            total += tr['amount']
+            row += 1
+        
+        ws.cell(row=row, column=4, value='JAMI:')
+        ws.cell(row=row, column=5, value=total)
+        for col in range(1, 9):
+            self._apply_data_style(ws.cell(row=row, column=col), is_money=(col == 5), is_total=True)
+        
+        ws.column_dimensions['A'].width = 6
+        ws.column_dimensions['B'].width = 12
+        ws.column_dimensions['C'].width = 12
+        ws.column_dimensions['D'].width = 12
+        ws.column_dimensions['E'].width = 18
+        ws.column_dimensions['F'].width = 20
+        ws.column_dimensions['G'].width = 20
+        ws.column_dimensions['H'].width = 30
+        
+        if not output_filename:
+            output_filename = f"turnover_{company_name.replace(' ', '_')}_{month:02d}_{year}.xlsx"
+        
+        filepath = os.path.join(self.output_dir, output_filename)
+        wb.save(filepath)
+        return filepath
+    
+    def create_osv_report(self, company_name, accounts_data, output_filename=None):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "OSV"
+        
+        ws.merge_cells('A1:F1')
+        ws['A1'] = f"{company_name} - OBOROT-SAL'DO VEDOMOSTI (OSV)"
+        ws['A1'].font = Font(name='Calibri', size=16, bold=True, color='1F4E79')
+        ws['A1'].alignment = Alignment(horizontal='center')
+        
+        headers = ['Hisob Raqami', 'Hisob Nomi', 'Boshlang\'ich Qoldiq', 
+                   'Debet Oborot', 'Kredit Oborot', 'Yakuniy Qoldiq']
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col, value=header)
+            self._apply_header_style(cell)
+        
+        row = 4
+        for acc in accounts_data:
+            ws.cell(row=row, column=1, value=acc['account'])
+            ws.cell(row=row, column=2, value=acc['name'])
+            ws.cell(row=row, column=3, value=acc.get('opening_balance', 0))
+            ws.cell(row=row, column=4, value=acc.get('debit_turnover', 0))
+            ws.cell(row=row, column=5, value=acc.get('credit_turnover', 0))
+            ws.cell(row=row, column=6, value=acc.get('closing_balance', 0))
+            
+            for col in range(1, 7):
+                self._apply_data_style(ws.cell(row=row, column=col), is_money=(col >= 3))
+            row += 1
+        
+        ws.column_dimensions['A'].width = 15
+        ws.column_dimensions['B'].width = 35
+        for col in ['C', 'D', 'E', 'F']:
+            ws.column_dimensions[col].width = 20
+        
+        if not output_filename:
+            output_filename = f"osv_{company_name.replace(' ', '_')}.xlsx"
+        
+        filepath = os.path.join(self.output_dir, output_filename)
+        wb.save(filepath)
+        return filepath
+"""
+p = doc.add_paragraph()
+run = p.add_run(excel_code)
+set_run_font(run, font_name='Consolas', size=9)
+
+print("Part 5 done")
+
+
+
+
+
+
+
+
+
+
+# ============================================
+# 6.5 word_processor.py
+# ============================================
+add_heading_custom(doc, "6.5. word_processor.py — Word Hujjatlari Generatori", 2)
+doc.add_paragraph("Buxgalteriya hujjatlari, shartnomalar, hisob-fakturalar va dalolatnomalarni yaratish.")
+
+word_code = """import os
+from docx import Document as WordDocument
+from docx.shared import Pt, RGBColor, Inches, Cm
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from datetime import datetime
+from config import Config
+
+class WordProcessor:
+    def __init__(self):
+        self.output_dir = Config.OUTPUT_DIR + '/word'
+        os.makedirs(self.output_dir, exist_ok=True)
+    
+    def _set_paragraph_style(self, paragraph, font_name='Times New Roman', size=12, bold=False, alignment=WD_ALIGN_PARAGRAPH.LEFT):
+        for run in paragraph.runs:
+            run.font.name = font_name
+            run.font.size = Pt(size)
+            run.font.bold = bold
+            run.font.color.rgb = RGBColor(0, 0, 0)
+        paragraph.alignment = alignment
+    
+    def create_invoice(self, company_data, client_data, items, invoice_number, date, output_filename=None):
+        doc = WordDocument()
+        
+        # Sarlavha
+        title = doc.add_paragraph()
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = title.add_run("HISOB-FAKTURA")
+        run.font.name = 'Times New Roman'
+        run.font.size = Pt(16)
+        run.font.bold = True
+        
+        # Raqam va sana
+        info = doc.add_paragraph()
+        info.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        info.add_run(f"№ {invoice_number}\\n")
+        info.add_run(f"Sana: {date}")
+        self._set_paragraph_style(info)
+        
+        # Sotuvchi
+        doc.add_paragraph()
+        p = doc.add_paragraph()
+        p.add_run("Sotuvchi: ").bold = True
+        p.add_run(company_data['name'])
+        self._set_paragraph_style(p)
+        
+        p = doc.add_paragraph()
+        p.add_run("STIR: ").bold = True
+        p.add_run(company_data['stir'])
+        self._set_paragraph_style(p)
+        
+        p = doc.add_paragraph()
+        p.add_run("Manzil: ").bold = True
+        p.add_run(company_data['address'])
+        self._set_paragraph_style(p)
+        
+        # Xaridor
+        doc.add_paragraph()
+        p = doc.add_paragraph()
+        p.add_run("Xaridor: ").bold = True
+        p.add_run(client_data['name'])
+        self._set_paragraph_style(p)
+        
+        # Jadval
+        doc.add_paragraph()
+        table = doc.add_table(rows=1, cols=5)
+        table.style = 'Table Grid'
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        
+        headers = ['T/R', 'Mahsulot/Xizmat', 'Miqdori', 'Narxi', 'Summa']
+        for i, header in enumerate(headers):
+            cell = table.rows[0].cells[i]
+            cell.text = header
+            for para in cell.paragraphs:
+                for run in para.runs:
+                    run.font.bold = True
+                    run.font.name = 'Times New Roman'
+                    run.font.size = Pt(11)
+        
+        total = 0
+        for idx, item in enumerate(items, 1):
+            row = table.add_row()
+            row.cells[0].text = str(idx)
+            row.cells[1].text = item['name']
+            row.cells[2].text = str(item['quantity'])
+            row.cells[3].text = f"{item['price']:,.2f}"
+            row.cells[4].text = f"{item['quantity'] * item['price']:,.2f}"
+            total += item['quantity'] * item['price']
+            
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        run.font.name = 'Times New Roman'
+                        run.font.size = Pt(11)
+        
+        # Jami
+        row = table.add_row()
+        row.cells[3].text = "JAMI:"
+        row.cells[4].text = f"{total:,.2f}"
+        for cell in row.cells:
+            for para in cell.paragraphs:
+                for run in para.runs:
+                    run.font.bold = True
+                    run.font.name = 'Times New Roman'
+        
+        # QQS
+        vat = total * 0.12
+        row = table.add_row()
+        row.cells[3].text = "QQS (12%):"
+        row.cells[4].text = f"{vat:,.2f}"
+        
+        row = table.add_row()
+        row.cells[3].text = "JAMI (QQS bilan):"
+        row.cells[4].text = f"{total + vat:,.2f}"
+        for cell in row.cells:
+            for para in cell.paragraphs:
+                for run in para.runs:
+                    run.font.bold = True
+                    run.font.name = 'Times New Roman'
+                    run.font.size = Pt(12)
+        
+        # Imzo
+        doc.add_paragraph()
+        doc.add_paragraph()
+        p = doc.add_paragraph()
+        p.add_run("Direktor: _________________ ").bold = True
+        p.add_run(company_data.get('director_name', ''))
+        self._set_paragraph_style(p)
+        
+        p = doc.add_paragraph()
+        p.add_run("Buxgalter: _________________ ").bold = True
+        p.add_run(company_data.get('accountant_name', ''))
+        self._set_paragraph_style(p)
+        
+        if not output_filename:
+            output_filename = f"invoice_{invoice_number.replace('/', '_')}.docx"
+        
+        filepath = os.path.join(self.output_dir, output_filename)
+        doc.save(filepath)
+        return filepath
+    
+    def create_contract(self, company_data, client_data, contract_data, output_filename=None):
+        doc = WordDocument()
+        
+        title = doc.add_paragraph()
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = title.add_run("ISH XIZMATLARI SHARTNOMASI")
+        run.font.name = 'Times New Roman'
+        run.font.size = Pt(16)
+        run.font.bold = True
+        
+        doc.add_paragraph()
+        
+        p = doc.add_paragraph()
+        p.add_run(f"{contract_data['city']} shahri, {contract_data['date']}\\n\\n")
+        self._set_paragraph_style(p)
+        
+        p = doc.add_paragraph()
+        p.add_run(f"{company_data['name']}, keyingi o'rinlarda 'Bajaruvchi' deb ataluvchi, bir tomondan, ")
+        p.add_run(f"va {client_data['name']}, keyingi o'rinlarda 'Buyurtmachi' deb ataluvchi, ikkinchi tomondan, ")
+        p.add_run("quyidagilar to'g'risida shartnoma tuzdik:\\n\\n")
+        self._set_paragraph_style(p)
+        
+        # Shartnoma shartlari
+        p = doc.add_paragraph()
+        p.add_run("1. SHARTNOMA PREDMETI\\n").bold = True
+        p.add_run(f"1.1. Buyurtmachi topshirig'i bo'yicha quyidagi ishlar bajariladi: {contract_data['subject']}\\n")
+        p.add_run(f"1.2. Ishlar narxi: {contract_data['amount']:,.2f} so'm (QQS bilan)\\n\\n")
+        self._set_paragraph_style(p)
+        
+        p = doc.add_paragraph()
+        p.add_run("2. TO'LOV TARTIBI\\n").bold = True
+        p.add_run(f"2.1. Buyurtmachi ishlar qiymatini {contract_data['payment_terms']}\\n")
+        p.add_run(f"2.2. Hisob-kitob schyoti: {company_data.get('bank_account', '')}\\n\\n")
+        self._set_paragraph_style(p)
+        
+        # Imzo qismi
+        doc.add_paragraph()
+        table = doc.add_table(rows=2, cols=2)
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        
+        table.rows[0].cells[0].text = "BAJARUVCHI:"
+        table.rows[0].cells[1].text = "BUYURTMACHI:"
+        table.rows[1].cells[0].text = f"\\n\\n{company_data['director_name']}\\nDirektor"
+        table.rows[1].cells[1].text = f"\\n\\n{client_data.get('director_name', '')}\\nDirektor"
+        
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        run.font.name = 'Times New Roman'
+                        run.font.size = Pt(11)
+        
+        if not output_filename:
+            output_filename = f"contract_{contract_data['number'].replace('/', '_')}.docx"
+        
+        filepath = os.path.join(self.output_dir, output_filename)
+        doc.save(filepath)
+        return filepath
+    
+    def create_act(self, company_data, client_data, act_data, output_filename=None):
+        doc = WordDocument()
+        
+        title = doc.add_paragraph()
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = title.add_run("BAJARILGAN ISHLAR DALOLATNOMASI")
+        run.font.name = 'Times New Roman'
+        run.font.size = Pt(16)
+        run.font.bold = True
+        
+        doc.add_paragraph()
+        
+        p = doc.add_paragraph()
+        p.add_run(f"{act_data['city']} shahri, {act_data['date']}\\n\\n")
+        self._set_paragraph_style(p)
+        
+        p = doc.add_paragraph()
+        p.add_run(f"Biz, quyida imzo qo'yuvchilar, {company_data['name']} (keyingi o'rinlarda 'Bajaruvchi') ")
+        p.add_run(f"tomonidan {client_data['name']} (keyingi o'rinlarda 'Buyurtmachi') uchun bajarilgan ishlarni ")
+        p.add_run("quyidagicha qabul qildik:\\n\\n")
+        self._set_paragraph_style(p)
+        
+        # Ishlar ro'yxati
+        for idx, work in enumerate(act_data['works'], 1):
+            p = doc.add_paragraph()
+            p.add_run(f"{idx}. {work['name']} - {work['quantity']} {work['unit']} - {work['amount']:,.2f} so'm\\n")
+            self._set_paragraph_style(p)
+        
+        p = doc.add_paragraph()
+        p.add_run(f"\\nJAMI: {act_data['total_amount']:,.2f} so'm\\n")
+        p.add_run(f"QQS (12%): {act_data['total_amount'] * 0.12:,.2f} so'm\\n")
+        p.add_run(f"JAMI (QQS bilan): {act_data['total_amount'] * 1.12:,.2f} so'm\\n")
+        self._set_paragraph_style(p)
+        
+        # Imzo
+        doc.add_paragraph()
+        table = doc.add_table(rows=2, cols=2)
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        table.rows[0].cells[0].text = "BAJARUVCHI:"
+        table.rows[0].cells[1].text = "BUYURTMACHI:"
+        table.rows[1].cells[0].text = f"\\n\\n{company_data['director_name']}\\nDirektor"
+        table.rows[1].cells[1].text = f"\\n\\n{client_data.get('director_name', '')}\\nDirektor"
+        
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        run.font.name = 'Times New Roman'
+                        run.font.size = Pt(11)
+        
+        if not output_filename:
+            output_filename = f"act_{act_data['number'].replace('/', '_')}.docx"
+        
+        filepath = os.path.join(self.output_dir, output_filename)
+        doc.save(filepath)
+        return filepath
+"""
+p = doc.add_paragraph()
+run = p.add_run(word_code)
+set_run_font(run, font_name='Consolas', size=9)
+
+print("Part 6 done")
+
+
+
+
+
+
+
+
+# ============================================
+# 6.6 bot.py — Telegram Bot
+# ============================================
+add_heading_custom(doc, "6.6. bot.py — Telegram Bot Asosiy Kodi", 2)
+doc.add_paragraph("python-telegram-bot v20+ kutubxonasi asosida qurilgan. Foydalanuvchi bilan muloqot, fayllarni qabul qilish va natijalarni yuborish.")
+
+bot_code = """import os
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler, 
+    CallbackQueryHandler, ConversationHandler, ContextTypes, filters
+)
+from config import Config
+from database import Database
+from accounting_engine import UzbekTaxCalculator
+from excel_processor import ExcelProcessor
+from word_processor import WordProcessor
+from validators import validate_excel_file, validate_account_number
+
+# Logging sozlamalari
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler(Config.LOG_FILE),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Conversation holatlari
+(MAIN_MENU, SELECT_COMPANY, SELECT_ACTION, INPUT_DATA, 
+ CONFIRM, UPLOAD_FILE, PROCESS_FILE) = range(7)
+
+# Til lug'atlari
+TEXTS = {
+    'uz': {
+        'welcome': "Assalomu alaykum! O'zbekiston Buxgalteriyasi Botiga xush kelibsiz!\\n\\n"
+                   "Bu bot quyidagi vazifalarni bajaradi:\\n"
+                   "✅ Ish haqi hisoblash\\n"
+                   "✅ QQS hisoblash\\n"
+                   "✅ Aylanma solig'i hisoblash\\n"
+                   "✅ Buxgalteriya provodkalari\\n"
+                   "✅ Excel/Word hisobotlar\\n\\n"
+                   "Davom etish uchun kompaniyangizni ro'yxatdan o'tkazing.",
+        'select_company': "Kompaniyangizni tanlang yoki yangi qo'shing:",
+        'main_menu': "Asosiy menyu:\\n\\nNima qilmoqchisiz?",
+        'salary': "📊 ISH HAQI HISOBLAGICH",
+        'vat': "💰 QQS HISOBLAGICH",
+        'turnover': "📈 AYLANMA SOLIG'I",
+        'reports': "📋 HISOBOTLAR",
+        'documents': "📄 HUJJATLAR",
+        'settings': "⚙️ SOZLAMALAR",
+        'input_employees': "Xodimlar ma'lumotlarini kiriting (Excel fayl yuboring yoki qo'lda kiriting):\\n"
+                          "Format: F.I.Sh. | Lavozim | Yalpi ish haqi",
+        'input_amount': "Summani kiriting (so'm):",
+        'processing': "⏳ Hisoblanmoqda...",
+        'done': "✅ Tayyor! Hisobot yuborildi.",
+        'error': "❌ Xatolik yuz berdi. Qayta urinib ko'ring.",
+        'invalid_file': "❌ Noto'g'ri fayl formati. Faqat .xlsx yoki .xls fayllar qabul qilinadi.",
+    },
+    'ru': {
+        'welcome': "Здравствуйте! Добро пожаловать в Бухгалтерский Бот Узбекистана!\\n\\n"
+                   "Этот бот выполняет следующие задачи:\\n"
+                   "✅ Расчет зарплаты\\n"
+                   "✅ Расчет НДС\\n"
+                   "✅ Расчет налога с оборота\\n"
+                   "✅ Бухгалтерские проводки\\n"
+                   "✅ Excel/Word отчеты",
+        'select_company': "Выберите компанию или добавьте новую:",
+        'main_menu': "Главное меню:\\n\\nЧто вы хотите сделать?",
+        'salary': "📊 РАСЧЕТ ЗАРПЛАТЫ",
+        'vat': "💰 РАСЧЕТ НДС",
+        'turnover': "📈 НАЛОГ С ОБОРОТА",
+        'reports': "📋 ОТЧЕТЫ",
+        'documents': "📄 ДОКУМЕНТЫ",
+        'settings': "⚙️ НАСТРОЙКИ",
+        'input_employees': "Введите данные сотрудников (отправьте Excel файл или введите вручную):",
+        'input_amount': "Введите сумму (сум):",
+        'processing': "⏳ Вычисляется...",
+        'done': "✅ Готово! Отчет отправлен.",
+        'error': "❌ Произошла ошибка. Попробуйте снова.",
+        'invalid_file': "❌ Неверный формат файла. Принимаются только .xlsx или .xls файлы.",
+    }
+}
+
+class AccountingBot:
+    def __init__(self):
+        self.config = Config()
+        self.db = Database()
+        self.calculator = UzbekTaxCalculator()
+        self.excel = ExcelProcessor()
+        self.word = WordProcessor()
+    
+    def _get_text(self, user_id, key):
+        user = self.db.get_user(user_id)
+        lang = user.get('language', 'uz') if user else 'uz'
+        return TEXTS.get(lang, TEXTS['uz']).get(key, key)
+    
+    async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user = update.effective_user
+        self.db.add_user(
+            telegram_id=user.id,
+            username=user.username,
+            full_name=user.full_name
+        )
+        
+        keyboard = [
+            [InlineKeyboardButton("🇺🇿 O'zbekcha", callback_data='lang_uz')],
+            [InlineKeyboardButton("🇷🇺 Русский", callback_data='lang_ru')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            "Tilni tanlang / Выберите язык:",
+            reply_markup=reply_markup
+        )
+        return MAIN_MENU
+    
+    async def set_language(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        await query.answer()
+        
+        lang = query.data.split('_')[1]
+        self.db.add_user(
+            telegram_id=query.from_user.id,
+            language=lang
+        )
+        
+        text = self._get_text(query.from_user.id, 'welcome')
+        
+        companies = self.db.get_user_companies(query.from_user.id)
+        if not companies:
+            keyboard = [[InlineKeyboardButton("➕ Kompaniya qo'shish", callback_data='add_company')]]
+        else:
+            keyboard = []
+            for comp in companies:
+                keyboard.append([InlineKeyboardButton(comp['name'], callback_data=f"comp_{comp['id']}")])
+            keyboard.append([InlineKeyboardButton("➕ Yangi kompaniya", callback_data='add_company')])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text=text, reply_markup=reply_markup)
+        return SELECT_COMPANY
+    
+    async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        await query.answer()
+        
+        text = self._get_text(query.from_user.id, 'main_menu')
+        
+        keyboard = [
+            [InlineKeyboardButton("📊 Ish haqi", callback_data='menu_salary')],
+            [InlineKeyboardButton("💰 QQS", callback_data='menu_vat')],
+            [InlineKeyboardButton("📈 Aylanma solig'i", callback_data='menu_turnover')],
+            [InlineKeyboardButton("📋 Hisobotlar", callback_data='menu_reports')],
+            [InlineKeyboardButton("📄 Hujjatlar", callback_data='menu_documents')],
+            [InlineKeyboardButton("⚙️ Sozlamalar", callback_data='menu_settings')],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text=text, reply_markup=reply_markup)
+        return MAIN_MENU
+    
+    async def handle_salary(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        await query.answer()
+        
+        text = self._get_text(query.from_user.id, 'salary')
+        
+        keyboard = [
+            [InlineKeyboardButton("📁 Excel fayl yuklash", callback_data='salary_upload')],
+            [InlineKeyboardButton("✏️ Qo'lda kiritish", callback_data='salary_manual')],
+            [InlineKeyboardButton("📊 Tarix", callback_data='salary_history')],
+            [InlineKeyboardButton("⬅️ Orqaga", callback_data='back_menu')],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text=text, reply_markup=reply_markup)
+        return SELECT_ACTION
+    
+    async def handle_file_upload(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        document = update.message.document
+        
+        if not validate_excel_file(document.file_name):
+            await update.message.reply_text(self._get_text(update.effective_user.id, 'invalid_file'))
+            return UPLOAD_FILE
+        
+        await update.message.reply_text(self._get_text(update.effective_user.id, 'processing'))
+        
+        try:
+            file = await document.get_file()
+            file_path = f"temp/{document.file_name}"
+            os.makedirs('temp', exist_ok=True)
+            await file.download_to_drive(file_path)
+            
+            # Excel faylni o'qish va hisoblash
+            import pandas as pd
+            df = pd.read_excel(file_path)
+            
+            # Ma'lumotlarni tekshirish
+            required_cols = ['full_name', 'salary']
+            if not all(col in df.columns for col in required_cols):
+                await update.message.reply_text(
+                    "❌ Excel faylda kerakli ustunlar yo'q: full_name, salary"
+                )
+                return UPLOAD_FILE
+            
+            # Hisoblash
+            results = []
+            for _, row in df.iterrows():
+                calc = self.calculator.calculate_salary(row['salary'])
+                calc['full_name'] = row['full_name']
+                calc['position'] = row.get('position', '')
+                results.append(calc)
+            
+            # Hisobot yaratish
+            company_id = context.user_data.get('company_id', 1)
+            company = self.db.get_user_companies(update.effective_user.id)
+            company_name = company[0]['name'] if company else "Kompaniya"
+            
+            report_path = self.excel.create_salary_report(
+                company_name=company_name,
+                month=datetime.now().month,
+                year=datetime.now().year,
+                employees_data=results
+            )
+            
+            # Bazaga saqlash
+            self.db.save_salary_report(company_id, datetime.now().month, datetime.now().year, results)
+            
+            # Faylni yuborish
+            with open(report_path, 'rb') as f:
+                await update.message.reply_document(
+                    document=f,
+                    caption=self._get_text(update.effective_user.id, 'done')
+                )
+            
+            # Vaqtinchalik faylni o'chirish
+            os.remove(file_path)
+            
+        except Exception as e:
+            logger.error(f"Xatolik: {e}")
+            await update.message.reply_text(self._get_text(update.effective_user.id, 'error'))
+        
+        return MAIN_MENU
+    
+    async def handle_vat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        await query.answer()
+        
+        text = self._get_text(query.from_user.id, 'vat')
+        
+        keyboard = [
+            [InlineKeyboardButton("➕ QQS qo'shish", callback_data='vat_add')],
+            [InlineKeyboardButton("➖ QQS ajratish", callback_data='vat_extract')],
+            [InlineKeyboardButton("⬅️ Orqaga", callback_data='back_menu')],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(text=text, reply_markup=reply_markup)
+        return SELECT_ACTION
+    
+    async def run(self):
+        application = Application.builder().token(self.config.BOT_TOKEN).build()
+        
+        conv_handler = ConversationHandler(
+            entry_points=[CommandHandler('start', self.start)],
+            states={
+                MAIN_MENU: [
+                    CallbackQueryHandler(self.set_language, pattern='^lang_'),
+                    CallbackQueryHandler(self.show_main_menu, pattern='^back_menu$'),
+                    CallbackQueryHandler(self.handle_salary, pattern='^menu_salary$'),
+                    CallbackQueryHandler(self.handle_vat, pattern='^menu_vat$'),
+                ],
+                SELECT_COMPANY: [
+                    CallbackQueryHandler(self.show_main_menu, pattern='^comp_'),
+                ],
+                SELECT_ACTION: [
+                    CallbackQueryHandler(self.show_main_menu, pattern='^back_menu$'),
+                ],
+                UPLOAD_FILE: [
+                    MessageHandler(filters.Document.ALL, self.handle_file_upload),
+                ],
+            },
+            fallbacks=[CommandHandler('start', self.start)],
+        )
+        
+        application.add_handler(conv_handler)
+        
+        logger.info("Bot ishga tushdi...")
+        await application.run_polling()
+
+if __name__ == '__main__':
+    bot = AccountingBot()
+    import asyncio
+    asyncio.run(bot.run())
+"""
+p = doc.add_paragraph()
+run = p.add_run(bot_code)
+set_run_font(run, font_name='Consolas', size=9)
+
+print("Part 7 done")
+
+
+
+
+
+
+
+
+
+# ============================================
+# 7. Telegram Bot Interfeysi
+# ============================================
+doc.add_page_break()
+add_heading_custom(doc, "7. Telegram Bot Interfeysi (UI/UX)", 1)
+
+doc.add_paragraph(
+    "Bot interfeysi foydalanuvchiga qulay va intuitiv bo'lishi kerak. Quyidagi menyu strukturasi taklif etiladi:"
+)
+
+add_heading_custom(doc, "7.1. Asosiy Menyu Tuzilishi", 2)
+
+menu_items = [
+    ("📊 Ish Haqi", "Xodimlar ish haqini hisoblash, vedomosti yaratish, tarixni ko'rish"),
+    ("💰 QQS Hisoblagich", "QQSni ajratish/qo'shish, hisob-fakturalar yaratish"),
+    ("📈 Aylanma Soliqi", "Aylanma solig'ini hisoblash (4%, 1%, 6% rejimlarida)"),
+    ("🏢 Foyda Soliqi", "Foyda solig'ini hisoblash (15% yoki 20%)"),
+    ("📋 Hisobotlar", "OSV, Oborot-sal'do qaydnomasi, provodkalar ro'yxati"),
+    ("📄 Hujjatlar", "Hisob-faktura, shartnoma, dalolatnoma yaratish"),
+    ("⚙️ Sozlamalar", "Kompaniya ma'lumotlari, soliq rejimi, til"),
+    ("❓ Yordam", "Botdan foydalanish bo'yicha ko'rsatmalar"),
+]
+
+for title, desc in menu_items:
+    p = doc.add_paragraph()
+    run = p.add_run(f"{title}: ")
+    set_run_font(run, bold=True, size=11)
+    p.add_run(desc)
+
+add_heading_custom(doc, "7.2. Ish Haqi Bo'limi", 2)
+
+salary_flow = [
+    "1. Foydalanuvchi 'Ish Haqi' tugmasini bosadi",
+    "2. Bot Excel fayl yuklash yoki qo'lda kiritishni taklif qiladi",
+    "3. Agar Excel tanlansa: fayl qabul qilinadi, ustunlar tekshiriladi (full_name, position, salary)",
+    "4. Har bir xodim uchun hisoblash amalga oshiriladi:",
+    "   • Yalpi ish haqi → Soliqdan ozod minimumni ayirish → Soliq solinadigan qism",
+    "   • JSHDS (12%) + Ijtimoiy sug'urta (4%) + Ishsizlik (0.5%) + Uy-joy (1%) + INCES (0.5%)",
+    "   • Sof ish haqi = Yalpi - Jami ushlanmalar",
+    "5. Ish beruvchi to'lovlari hisoblanadi (Ijtimoiy soliq 12% + Pensiya 0.1%)",
+    "6. Natija chiroyli Excel fayl sifatida yuboriladi",
+    "7. Bazada saqlanadi va keyingi oylarga solishtirish mumkin",
+]
+
+for step in salary_flow:
+    doc.add_paragraph(step, style='List Number')
+
+add_heading_custom(doc, "7.3. Excel Fayl Shablonlari", 2)
+
+doc.add_paragraph("Foydalanuvchi yuklaydigan Excel fayllar quyidagi shablonlarga mos bo'lishi kerak:")
+
+templates = [
+    ("Ish Haqi", "full_name | position | salary | bonus | deductions"),
+    ("Savdo Oboroti", "date | product_name | quantity | price | client_name | invoice_number"),
+    ("Xarajatlar", "date | category | description | amount | payment_method | document_ref"),
+    ("Xodimlar Ro'yxati", "full_name | position | passport | pinfl | hire_date | salary | status"),
+]
+
+for name, cols in templates:
+    p = doc.add_paragraph()
+    run = p.add_run(f"📁 {name}: ")
+    set_run_font(run, bold=True)
+    p.add_run(cols)
+
+# ============================================
+# 8. Excel Hisobotlari Dizayni
+# ============================================
+doc.add_page_break()
+add_heading_custom(doc, "8. Excel Hisobotlari Dizayni", 1)
+
+doc.add_paragraph(
+    "Excel fayllar professional ko'rinishda bo'lishi kerak. Quyidagi dizayn standarti qo'llaniladi:"
+)
+
+add_heading_custom(doc, "8.1. Rang Palitrası", 2)
+
+colors = [
+    ("Asosiy sarlavha (Header)", "#1F4E79", "Oq matn, qalin, 12pt"),
+    ("Pastki sarlavha (Subheader)", "#2E75B6", "Oq matn, qalin, 11pt"),
+    ("Ma'lumotlar qatori", "#FFFFFF", "Qora matn, 11pt"),
+    ("Jami qator (Total)", "#D9E1F2", "Qora matn, qalin, 11pt"),
+    ("Chegara (Border)", "#000000", "Yupqa chiziq (thin)"),
+]
+
+table = doc.add_table(rows=1, cols=3)
+table.style = 'Table Grid'
+headers = ["Element", "Rang (Hex)", "Shrift"]
+for i, h in enumerate(headers):
+    cell = table.rows[0].cells[i]
+    cell.text = h
+    set_cell_shading(cell, '1F4E79')
+    for para in cell.paragraphs:
+        for run in para.runs:
+            run.font.bold = True
+            run.font.color.rgb = RGBColor(255, 255, 255)
+
+for name, color, font in colors:
+    row = table.add_row()
+    row.cells[0].text = name
+    row.cells[1].text = color
+    row.cells[2].text = font
+
+add_heading_custom(doc, "8.2. Formatlash Qoidalari", 2)
+
+format_rules = [
+    "Barcha pul miqdorlari: #,##0.00 'so'm' formatida",
+    "Sana: DD.MM.YYYY formatida",
+    "Foizlar: 0.00% formatida",
+    "Raqamlar: o'ngga tekislangan (right align)",
+    "Matnlar: chapga tekislangan (left align)",
+    "Sarlavhalar: markazga tekislangan (center align)",
+    "Ustun kengligi: avtomatik moslashtirish (auto-fit)",
+    "Qator balandligi: sarlavhalar uchun 40pt, ma'lumotlar uchun 20pt",
+    "Chegaralar: barcha hujayralar uchun yupqa chiziq",
+    "Formula: Excel ichki SUM, AVERAGE formulalaridan foydalanish",
+]
+
+for rule in format_rules:
+    doc.add_paragraph(rule, style='List Bullet')
+
+add_heading_custom(doc, "8.3. Hisobot Turlari", 2)
+
+reports = [
+    ("Ish Haqi Vedomosti", "Xodimlar, lavozimlar, yalpi ish haqi, barcha ushlanmalar, sof ish haqi, jami"),
+    ("QQS Hisoboti", "Sana, asosiy summa, QQS (12%), jami summa, xaridor, hisob-faktura raqami"),
+    ("Aylanma Soliq Hisoboti", "Oy, yil, umumiy aylanma, soliq stavkasi (4%/1%/6%), soliq summasi"),
+    ("OSV (Oborot-Sal'do Vedomosti)", "Hisob raqami, nomi, boshlang'ich qoldiq, debet, kredit, yakuniy qoldiq"),
+    ("Xarajatlar Hisoboti", "Sana, kategoriya, tavsif, summa, to'lov usuli, hujjat raqami"),
+    ("Foyda va Zarar Hisoboti", "Daromad, xarajatlar, soliqlar, sof foyda/zarar"),
+]
+
+for name, desc in reports:
+    p = doc.add_paragraph()
+    run = p.add_run(f"📊 {name}: ")
+    set_run_font(run, bold=True)
+    p.add_run(desc)
+
+# ============================================
+# 9. Word Hujjatlari Generatori
+# ============================================
+doc.add_page_break()
+add_heading_custom(doc, "9. Word Hujjatlari Generatori", 1)
+
+doc.add_paragraph(
+    "Word hujjatlari rasmiy buxgalteriya hujjatlari sifatida ishlatiladi. Quyidagi hujjat turlari yaratiladi:"
+)
+
+add_heading_custom(doc, "9.1. Hisob-Faktura", 2)
+
+invoice_items = [
+    "Sarlavha: 'HISOB-FAKTURA' (markazda, qalin, 16pt)",
+    "Raqam va sana (o'ng tomonda)",
+    "Sotuvchi ma'lumotlari (nomi, STIR, manzil, bank rekvizitlari)",
+    "Xaridor ma'lumotlari",
+    "Jadval: T/R, mahsulot/xizmat nomi, miqdori, narxi, summa",
+    "Jami summa, QQS (12%), jami (QQS bilan)",
+    "Imzo: Direktor va buxgalter",
+]
+
+for item in invoice_items:
+    doc.add_paragraph(item, style='List Bullet')
+
+add_heading_custom(doc, "9.2. Shartnoma", 2)
+
+contract_items = [
+    "Sarlavha: 'ISH XIZMATLARI SHARTNOMASI'",
+    "Shartnoma raqami, sana, joy",
+    "Tomonlar ma'lumotlari (Bajaruvchi va Buyurtmachi)",
+    "Shartnoma predmeti (qanday ishlar bajariladi)",
+    "Narxi va to'lov tartibi",
+    "Tomonlarning huquq va majburiyatlari",
+    "Force majeur va nizolarni hal etish",
+    "Imzo qismi (Direktorlar imzolari, muhrlar)",
+]
+
+for item in contract_items:
+    doc.add_paragraph(item, style='List Bullet')
+
+add_heading_custom(doc, "9.3. Bajarilgan Ishlar Dalolatnomasi", 2)
+
+act_items = [
+    "Sarlavha: 'BAJARILGAN ISHLAR DALOLATNOMASI'",
+    "Dalolatnoma raqami va sana",
+    "Bajaruvchi va Buyurtmachi ma'lumotlari",
+    "Bajarilgan ishlar ro'yxati (nomi, miqdori, birligi, narxi, summa)",
+    "Jami summa, QQS (12%), jami",
+    "Qabul qilish akti (ishlar sifatiga baho)",
+    "Imzo qismi (tomonlar vakillari)",
+]
+
+for item in act_items:
+    doc.add_paragraph(item, style='List Bullet')
+
+print("Part 8 done")
+
+
+
+
+
+
+
+
+
+
+10. Xavfsizlik va Maxfiylik
+10.1. Ma'lumotlar Xavfsizligi
+SQLite ma'lumotlar bazasi foydalanuvchining shaxsiy ma'lumotlarini saqlaydi
+.env fayli orqali bot tokeni va maxfiy kalitlar saqlanadi (GitHub'ga yuklanmaydi)
+Foydalanuvchi autentifikatsiyasi: Har bir foydalanuvchi faqat o'z ma'lumotlarini ko'radi
+Xatolik loglari: logs/bot.log fayliga yoziladi, lekin shaxsiy ma'lumotlar (telefon, passport) logga tushmaydi
+10.2. Fayl Xavfsizligi
+Yuklangan Excel fayllar temp/ papkasida vaqtinchalik saqlanadi
+Hisobot tayyor bo'lgandan so'ng vaqtinchalik fayllar avtomatik o'chiriladi
+Generatsiya qilingan fayllar outputs/ papkasida saqlanadi
+10.3. Huquqiy Ogohlantirish
+Bot yaratgan hisobotlar ichki buxgalteriya hisobi uchun mo'ljallangan. Soliq organlariga rasmiy taqdim etish uchun:
+Elektron imzo (ECP) integratsiyasi kerak
+E-faktura formatiga mos kelishi kerak
+Bu funksiyalar 2.0 versiyada qo'shiladi
+11. Sinov (Testing) Rejasi
+11.1. Avtomatik Testlar
+Python
+# test_accounting.py
+import unittest
+from accounting_engine import UzbekTaxCalculator
+
+class TestSalaryCalculation(unittest.TestCase):
+    def setUp(self):
+        self.calc = UzbekTaxCalculator()
+    
+    def test_salary_with_tax_free(self):
+        # Soliqdan ozod minimumdan yuqori ish haqi
+        result = self.calc.calculate_salary(3_000_000)
+        self.assertEqual(result['tax_free_amount'], 1_650_000)
+        self.assertAlmostEqual(result['taxable_amount'], 1_350_000, places=2)
+        self.assertAlmostEqual(result['jshds'], 162_000, places=2)  # 1_350_000 * 0.12
+    
+    def test_salary_below_tax_free(self):
+        # Soliqdan ozod minimumdan past ish haqi
+        result = self.calc.calculate_salary(1_000_000)
+        self.assertEqual(result['taxable_amount'], 0)
+        self.assertEqual(result['jshds'], 0)
+    
+    def test_total_deductions(self):
+        result = self.calc.calculate_salary(5_000_000)
+        expected_deductions = (
+            result['jshds'] + 
+            result['social_insurance'] + 
+            result['unemployment'] + 
+            result['housing'] + 
+            result['inces']
+        )
+        self.assertAlmostEqual(result['total_deductions'], expected_deductions, places=2)
+    
+    def test_employer_costs(self):
+        result = self.calc.calculate_employer_costs(3_000_000)
+        self.assertAlmostEqual(result['social_tax'], 360_000, places=2)  # 3_000_000 * 0.12
+        self.assertAlmostEqual(result['pension_fund'], 3_000, places=2)  # 3_000_000 * 0.001
+
+class TestVATCalculation(unittest.TestCase):
+    def setUp(self):
+        self.calc = UzbekTaxCalculator()
+    
+    def test_vat_extraction(self):
+        result = self.calc.calculate_vat(1_120_000, include_vat=True)
+        self.assertAlmostEqual(result['vat_amount'], 120_000, places=2)
+        self.assertAlmostEqual(result['base_amount'], 1_000_000, places=2)
+    
+    def test_vat_addition(self):
+        result = self.calc.calculate_vat(1_000_000, include_vat=False)
+        self.assertAlmostEqual(result['vat_amount'], 120_000, places=2)
+        self.assertAlmostEqual(result['total_amount'], 1_120_000, places=2)
+
+if __name__ == '__main__':
+    unittest.main()
+11.2. Qo'lda Testlar
+Table
+Test	Kiritish	Kutilgan Natija
+Ish haqi hisoblash	Excel: 3 xodim, har biri 5 000 000 so'm	Jami ushlanmalar to'g'ri, Excel fayl chiroyli
+QQS ajratish	1 120 000 so'm	1 000 000 + 120 000 QQS
+Aylanma soliq	50 000 000 so'm, 4% rejim	2 000 000 so'm soliq
+Provodkalar	1 ta xodim, 3 000 000 so'm	9 ta provodka (debet/kredit)
+Hisob-faktura	Kompaniya + Xaridor + 3 ta mahsulot	Word fayl, jami + QQS bilan
+12. Joylashtirish (Deployment) Ko'rsatmalari
+12.1. Talablar
+Python: 3.10+
+OS: Windows 10/11, Linux (Ubuntu 20.04+), macOS
+RAM: Kamida 2 GB
+Disk: 1 GB bo'sh joy
+12.2. O'rnatish
+bash
+# 1. Loyihani klonlash
+git clone https://github.com/username/uzbekistan_accounting_bot.git
+cd uzbekistan_accounting_bot
+
+# 2. Virtual muhit yaratish
+python -m venv venv
+
+# 3. Virtual muhitni faollashtirish
+# Windows:
+venv\Scripts\activate
+# Linux/macOS:
+source venv/bin/activate
+
+# 4. Kutubxonalarni o'rnatish
+pip install -r requirements.txt
+
+# 5. .env faylini yaratish
+cp .env.example .env
+# .env faylini tahrirlash:
+# BOT_TOKEN=your_telegram_bot_token_here
+# DATABASE_PATH=data/accounting.db
+# OUTPUT_DIR=outputs
+
+# 6. Papkalarni yaratish
+mkdir -p data outputs/excel outputs/word temp logs
+
+# 7. Botni ishga tushirish
+python bot.py
+12.3. requirements.txt
+plain
+python-telegram-bot==20.7
+openpyxl==3.1.2
+pandas==2.1.4
+python-docx==1.1.0
+python-dotenv==1.0.0
+12.4. Serverga Joylashtirish (Linux)
+bash
+# systemd servis yaratish
+sudo nano /etc/systemd/system/uzb-accounting-bot.service
+
+# Quyidagi kontentni qo'shing:
+[Unit]
+Description=Uzbekistan Accounting Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/uzbekistan_accounting_bot
+Environment=PATH=/home/ubuntu/uzbekistan_accounting_bot/venv/bin
+ExecStart=/home/ubuntu/uzbekistan_accounting_bot/venv/bin/python bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+
+# Servisni faollashtirish
+sudo systemctl daemon-reload
+sudo systemctl enable uzb-accounting-bot
+sudo systemctl start uzb-accounting-bot
+
+# Holatini tekshirish
+sudo systemctl status uzb-accounting-bot
+13. Antigravity IDE Prompti
+Antigravity IDE — bu Google tomonidan yaratilgan agent-first development platforma. Unda siz tabiiy til (o'zbek/ingliz) orqali loyiha tavsifini berasiz, agentlar esa kodni yozish, testlash va tuzatishni o'zi amalga oshiradi.
+13.1. Promptni Yozish Uslubi
+Antigravity IDE da prompt quyidagi strukturada bo'lishi kerak:
+13.2. To'liq Prompt (Nusxa Olib Qo'ying)
+plain
+Create a complete Uzbekistan Accounting Telegram Bot with the following specifications:
+
+PROJECT OVERVIEW:
+Build a Telegram bot for Uzbekistan accounting that calculates taxes, salaries, VAT, and generates professional Excel/Word reports based on Uzbekistan Tax Code 2026 and NSBU (National Accounting Standards).
+
+TAX RATES (strictly use these exact rates):
+- VAT (QQS): 12%
+- Personal Income Tax (JSHDS): 12%, tax-free minimum: 1,650,000 UZS (1.5x minimum wage)
+- Social Tax (employer): 12%
+- Pension Fund (employer): 0.1%
+- Employee deductions:
+  - Social insurance: 4%
+  - Unemployment insurance: 0.5%
+  - Housing fund: 1%
+  - INCES (vocational training): 0.5%
+- Profit Tax: 15% (20% for banks)
+- Turnover Tax: 4% standard, 1% preferential, 6% simplified VAT regime
+
+ACCOUNT CHART (NSBU compliant):
+Use these exact account numbers:
+- 0110-0150: Fixed Assets
+- 0210: Accumulated Depreciation
+- 1010-1030: Materials
+- 2010-2020: Production
+- 4010: Finished Goods
+- 4110: Goods for Sale
+- 5010-5020: Cash
+- 5110-5120: Bank Accounts
+- 6010-6020: Suppliers/Contractors
+- 6210: Customers
+- 6710: Salary Payables
+- 6810-6870: Tax Accounts (VAT, PIT, Social, Profit, Turnover, Property, Land)
+- 6910-6950: Insurance Accounts
+- 8010-8020: Sales Revenue
+- 9010-9030: Expenses
+- 9910: Profit/Loss
+
+TECHNICAL STACK:
+- Python 3.10+
+- python-telegram-bot v20+
+- openpyxl for Excel generation
+- python-docx for Word generation
+- pandas for Excel processing
+- SQLite for database
+- python-dotenv for config
+
+FILE STRUCTURE:
+Create these files:
+1. config.py - All configuration and tax rates
+2. accounting_engine.py - Tax calculation engine with UzbekTaxCalculator class
+3. database.py - SQLite database with tables: users, companies, employees, salary_reports, salary_details, transactions, documents
+4. excel_processor.py - Professional Excel report generator with styling (blue headers, currency format, borders)
+5. word_processor.py - Word document generator (invoices, contracts, acts)
+6. bot.py - Telegram bot with conversation handler, multi-language support (Uzbek, Russian), inline keyboards
+7. validators.py - Input validation
+8. requirements.txt
+9. .env.example
+
+CORE FEATURES:
+1. Salary Calculator:
+   - Accept Excel upload or manual input
+   - Calculate all deductions (JSHDS, social, unemployment, housing, INCES)
+   - Calculate employer costs (social tax 12% + pension 0.1%)
+   - Generate styled Excel report
+   - Generate accounting entries (provodki)
+   - Save to database
+
+2. VAT Calculator:
+   - Add VAT (12%) or extract VAT from amount
+   - Show base amount, VAT amount, total
+
+3. Turnover Tax Calculator:
+   - Support 3 regimes: standard (4%), preferential (1%), simplified VAT (6%)
+   - Calculate based on turnover amount
+
+4. Profit Tax Calculator:
+   - 15% standard, 20% for banks
+
+5. Document Generator:
+   - Invoice (hisob-faktura) with company info, client info, items table, VAT, signatures
+   - Contract (shartnoma) with parties, subject, price, payment terms, signatures
+   - Act (dalolatnoma) with works list, amounts, VAT, acceptance signatures
+
+6. Reports:
+   - OSV (Oborot-Saldo Vedomosti)
+   - Salary history
+   - Transaction list
+
+BOT UI/UX:
+- Start command with language selection (Uzbek/Russian)
+- Main menu with inline keyboards
+- Company registration flow
+- File upload handling with validation
+- Step-by-step calculation explanation in chat
+- Send generated files back to user
+- Error handling with user-friendly messages
+
+EXCEL STYLING REQUIREMENTS:
+- Header: Dark blue (#1F4E79), white bold text, 12pt
+- Subheader: Medium blue (#2E75B6), white bold text, 11pt
+- Data rows: White background, black text, 11pt
+- Total row: Light blue (#D9E1F2), bold text
+- Currency format: #,##0.00 "so'm"
+- All cells with thin borders
+- Auto-fit column widths
+- Row heights: 40pt for headers, 20pt for data
+
+DATABASE SCHEMA:
+Create SQLite tables with proper foreign keys:
+- users: id, telegram_id, username, full_name, phone, language, created_at, is_active
+- companies: id, user_id, name, stir, address, director_name, accountant_name, tax_regime, created_at
+- employees: id, company_id, full_name, position, passport, pinfl, salary, hire_date, is_active
+- salary_reports: id, company_id, month, year, gross_total, deductions_total, net_total, created_at
+- salary_details: id, report_id, employee_id, gross_salary, jshds, social_insurance, unemployment, housing, inces, pension, net_salary
+- transactions: id, company_id, date, debit_account, credit_account, amount, description, document_ref, created_at
+- documents: id, company_id, doc_type, file_path, file_name, created_at, status
+
+IMPORTANT RULES:
+- Use Decimal for all money calculations to avoid floating point errors
+- Round all results to 2 decimal places
+- Validate all account numbers against NSBU chart
+- Support multiple companies per user
+- All user data must be isolated (user can only see their own data)
+- Log errors but never expose sensitive data in logs
+- Temporary files must be cleaned up after processing
+- Generated files should be saved in outputs/ directory
+
+TESTING:
+Include unit tests for:
+- Salary calculation with and without tax-free minimum
+- VAT addition and extraction
+- Turnover tax for all 3 regimes
+- Profit tax calculation
+- Employer cost calculation
+- Database CRUD operations
+
+DEPLOYMENT:
+- Include requirements.txt with exact versions
+- Include .env.example
+- Include systemd service file configuration
+- Instructions for Linux server deployment
+
+Please generate the complete, production-ready code for all files. Make sure the code is well-commented, follows PEP 8, and handles edge cases properly. The bot should be ready to run after setting the BOT_TOKEN in .env file.
+13.3. Promptni Antigravity IDE ga Kiritish
+Antigravity IDE ni oching
+Agent Manager yoki Editor oynasiga o'ting
+Yuqoridagi promptni to'liq nusxa olib, chat oynasiga joylashtiring
+Enter bosing va agentlarning kodni yozishini kuting
+Agar agent biron bir narsani so'rasa, aniq javob bering (masalan, "Use SQLite", "Support both Uzbek and Russian")
+13.4. Muhim Eslatmalar
+Batafsilroq prompt = yaxshiroq natija. Yuqoridagi promptda barcha soliq stavkalari, hisob raqamlari, ranglar aniq ko'rsatilgan.
+Kichik qismlarga bo'lib bering. Agar butun loyihani bir martada yozish talab qilinsa, agent chalkishib ketishi mumkin. Avval config.py, accounting_engine.py, database.py ni so'rang, keyin qolganlarini.
+Testlarni so'rang. Har bir modul yozilgandan so'ng, "Now write unit tests for this module" deb ayting.
+Xatolarni tuzating. Agar agent soliq stavkasini xato yozsa, darhol "No, the social tax employer rate is 12%, not 12.5%" deb to'g'rilang.
+Xulosa
+Ushbu rejada sizga quyidagilar taqdim etildi:
+✅ To'g'rilangan soliq stavkalari (2026-yil)
+✅ NSBU hisob raqamlari (xatolar to'g'rilangan)
+✅ To'liq fayl strukturasi (9 ta asosiy fayl + papkalar)
+✅ SQLite ma'lumotlar bazasi (8 ta jadval)
+✅ Barcha modullarning kod namunalari (config, accounting_engine, database, excel, word, bot)
+✅ Telegram bot UI/UX (menyu, tugmalar, fayl yuklash)
+✅ Excel dizayn standarti (ranglar, shriftlar, formatlar)
+✅ Word hujjatlari turlari (hisob-faktura, shartnoma, dalolatnoma)
+✅ Test rejasi (avtomatik va qo'lda testlar)
+✅ Deployment ko'rsatmalari (Windows, Linux, systemd)
+✅ Antigravity IDE prompti (to'liq, tayyor nusxa olish uchun)

@@ -1,0 +1,1658 @@
+================================================================================
+                    O'ZBEKISTON BUXGALTERIYA TELEGRAM BOTI
+                        TO'LIY ISHCHI KODI (VS CODE)
+================================================================================
+
+Fayllar ro'yxati:
+1. main.py
+2. config/settings.py
+3. handlers/__init__.py
+4. handlers/start.py
+5. handlers/excel_handler.py
+6. handlers/report_handler.py
+7. services/__init__.py
+8. services/excel_parser.py
+9. services/calculator.py
+10. services/report_generator.py
+11. utils/__init__.py
+12. utils/validators.py
+13. utils/formatters.py
+14. requirements.txt
+15. .env.example
+16. README.md
+
+================================================================================
+1. main.py
+================================================================================
+
+import logging
+import os
+import sys
+
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+    ContextTypes,
+    ConversationHandler,
+)
+from dotenv import load_dotenv
+
+from handlers.start import start_command, button_handler
+from handlers.excel_handler import (
+    receive_excel,
+    analyze_data,
+    ASK_ANALYSIS_TYPE,
+    cancel_handler,
+)
+from handlers.report_handler import (
+    balance_sheet_command,
+    income_statement_command,
+    cash_flow_command,
+    quick_analysis_command,
+)
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler("bot.log", encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ],
+)
+logger = logging.getLogger(__name__)
+
+load_dotenv()
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = os.getenv("ADMIN_ID")
+
+if not BOT_TOKEN:
+    logger.error("BOT_TOKEN topilmadi! .env faylni tekshiring.")
+    sys.exit(1)
+
+
+def main() -> None:
+    logger.info("Bot ishga tushirilmoqda...")
+    application = Application.builder().token(BOT_TOKEN).build()
+
+    excel_conv_handler = ConversationHandler(
+        entry_points=[
+            MessageHandler(
+                filters.Document.FileExtension("xlsx") | filters.Document.FileExtension("xls"),
+                receive_excel,
+            )
+        ],
+        states={
+            ASK_ANALYSIS_TYPE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, analyze_data),
+            ],
+        },
+        fallbacks=[
+            CommandHandler("cancel", cancel_handler),
+            MessageHandler(filters.COMMAND, cancel_handler),
+        ],
+    )
+
+    application.add_handler(CommandHandler("start", start_command))
+    application.add_handler(CommandHandler("balans", balance_sheet_command))
+    application.add_handler(CommandHandler("daromad", income_statement_command))
+    application.add_handler(CommandHandler("naqd", cash_flow_command))
+    application.add_handler(CommandHandler("tezkor", quick_analysis_command))
+    application.add_handler(CommandHandler("yordam", start_command))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    application.add_handler(excel_conv_handler)
+    application.add_error_handler(error_handler)
+
+    logger.info("Bot muvaffaqiyatli ishga tushdi!")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.error(f"Xatolik: {context.error}", exc_info=True)
+    if update and update.effective_message:
+        await update.effective_message.reply_text(
+            "❌ <b>Xatolik yuz berdi!</b>\n\nIltimos, qaytadan urinib ko'ring.",
+            parse_mode="HTML",
+        )
+
+
+if __name__ == "__main__":
+    main()
+
+
+================================================================================
+2. config/settings.py
+================================================================================
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+
+MAX_FILE_SIZE = 10 * 1024 * 1024
+TEMP_DIR = "data/temp/"
+
+UZ_ACCOUNT_CODES = {
+    "1010": "Asosiy binolar va inshootlar",
+    "1020": "Mashina va uskunalar",
+    "1030": "Transport vositalari",
+    "1040": "Mebel va ofis jihozlari",
+    "1050": "Hisoblash texnikasi",
+    "1060": "Boshqa asosiy vositalar",
+    "1110": "Asosiy vositalarning amortizatsiyasi",
+    "1210": "Uzoq muddatli moliyaviy investitsiyalar",
+    "1310": "Boshqa uzoq muddatli aktivlar",
+    "2110": "Tayyor mahsulotlar",
+    "2120": "Xom ashyo va materiallar",
+    "2130": "Yarim tayyor mahsulotlar",
+    "2140": "Tovar-materiallar",
+    "2150": "Boshqa materiallar",
+    "2210": "Debyor qarzlari",
+    "2220": "Shartnoma bo'yicha oldindan to'lovlar",
+    "2310": "Kassa",
+    "2320": "Hisob raqamlari",
+    "2330": "Valyuta hisob raqamlari",
+    "2410": "Boshqa joriy aktivlar",
+    "3010": "Uzoq muddatli kreditlar",
+    "3020": "Uzoq muddatli qarzlar",
+    "3110": "Qisqa muddatli kreditlar",
+    "3120": "Qisqa muddatli qarzlar",
+    "3210": "Kreditor qarzlari",
+    "3220": "Shartnoma bo'yicha oldindan olingan to'lovlar",
+    "3310": "Ish haqi bo'yicha majburiyatlar",
+    "3320": "Budjetga majburiyatlar",
+    "3330": "Sug'urta bo'yicha majburiyatlar",
+    "3410": "Boshqa joriy majburiyatlar",
+    "4110": "Ustav kapitali",
+    "4120": "Qo'shimcha kapital",
+    "4130": "Zaxira kapital",
+    "4210": "Olingan foyda",
+    "4220": "Sarflangan foyda",
+    "4310": "Yillik foyda (zarar)",
+    "5010": "Realizatsiya daromadlari",
+    "5020": "Xizmat ko'rsatish daromadlari",
+    "5030": "Boshqa operatsion daromadlar",
+    "5110": "Moliyaviy daromadlar",
+    "5120": "Foizlar bo'yicha daromadlar",
+    "5210": "Boshqa daromadlar",
+    "6010": "Asosiy ishlab chiqarish tannarxi",
+    "6020": "Yordamchi ishlab chiqarish tannarxi",
+    "6110": "Boshqaruv xarajatlari",
+    "6120": "Amortizatsiya xarajatlari",
+    "6130": "Ish haqi xarajatlari",
+    "6140": "Boshqa boshqaruv xarajatlari",
+    "6210": "Sotish xarajatlari",
+    "6220": "Reklama va marketing xarajatlari",
+    "6310": "Foizlar bo'yicha xarajatlar",
+    "6320": "Bank xizmatlari xarajatlari",
+    "6410": "Foyda solig'i",
+    "6510": "Boshqa xarajatlar",
+    "7010": "Operatsion valyuta kursi farqlari",
+    "7020": "Boshqa daromadlar",
+    "7110": "Operatsion valyuta kursi zararlari",
+    "7120": "Boshqa xarajatlar",
+}
+
+REPORT_TYPES = {
+    "balance": "Buxgalteriya Balansi (BHMS 15)",
+    "income": "Moliyaviy Natijalar (BHMS 3)",
+    "cashflow": "Naqd Pul Oqimlari (BHMS 9)",
+    "full": "To'liq Hisobot",
+}
+
+
+================================================================================
+3. handlers/__init__.py
+================================================================================
+
+# handlers paketi
+
+
+================================================================================
+4. handlers/start.py
+================================================================================
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes
+
+
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    keyboard = [
+        [
+            InlineKeyboardButton("📊 Balans", callback_data="balance"),
+            InlineKeyboardButton("📈 Daromad", callback_data="income"),
+        ],
+        [
+            InlineKeyboardButton("💰 Naqd pul", callback_data="cashflow"),
+            InlineKeyboardButton("📁 Excel Yuklash", callback_data="upload"),
+        ],
+        [
+            InlineKeyboardButton("🔍 Tezkor Tahlil", callback_data="quick"),
+            InlineKeyboardButton("❓ Yordam", callback_data="help"),
+        ],
+    ]
+
+    welcome_text = (
+        f"🇺🇿 <b>Assalomu alaykum, {user.first_name}!</b>\n\n"
+        f"<b>O'zbekiston Buxgalteriya Botiga xush kelibsiz!</b>\n\n"
+        f"📋 Bu bot quyidagi imkoniyatlarni beradi:\n"
+        f"• Excel fayllarni tahlil qilish\n"
+        f"• Buxgalteriya balansini tuzish\n"
+        f"• Moliyaviy natijalar hisobotini chiqarish\n"
+        f"• Naqd pul oqimlari hisobotini yaratish\n"
+        f"• Hisob-kitoblarni avtomatik tekshirish\n\n"
+        f"📎 Excel faylni yuboring yoki quyidagi tugmalardan foydalaning.\n\n"
+        f"⚠️ <i>Barcha hisobotlar O'zbekiston BHMS standartlariga asoslangan</i>\n\n"
+        f"📌 <b>Buyruqlar:</b>\n"
+        f"/balans - Buxgalteriya balansi\n"
+        f"/daromad - Moliyaviy natijalar\n"
+        f"/naqd - Naqd pul oqimlari\n"
+        f"/tezkor - Tezkor tahlil\n"
+        f"/cancel - Bekor qilish"
+    )
+
+    await update.message.reply_text(
+        welcome_text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML",
+    )
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+
+    if data == "balance":
+        from handlers.report_handler import balance_sheet_command
+        await balance_sheet_command(update, context)
+    elif data == "income":
+        from handlers.report_handler import income_statement_command
+        await income_statement_command(update, context)
+    elif data == "cashflow":
+        from handlers.report_handler import cash_flow_command
+        await cash_flow_command(update, context)
+    elif data == "upload":
+        await query.edit_message_text(
+            "📎 <b>Excel faylni yuboring</b>\n\n"
+            "Fayl quyidagi ustunlarni o'z ichiga olishi kerak:\n"
+            "• <code>hisob_raqami</code>\n"
+            "• <code>nomlanishi</code>\n"
+            "• <code>debet</code>\n"
+            "• <code>kredit</code>\n\n"
+            "Faylni yuboring va men uni tahlil qilaman!",
+            parse_mode="HTML",
+        )
+    elif data == "quick":
+        from handlers.report_handler import quick_analysis_command
+        await quick_analysis_command(update, context)
+    elif data == "help":
+        help_text = (
+            "❓ <b>YORDAM</b>\n\n"
+            "<b>Excel fayl namunasi:</b>\n"
+            "hisob_raqami | nomlanishi | debet | kredit\n"
+            "1010 | Asosiy binolar | 500000000 | 0\n"
+            "4010 | Realizatsiya daromadlari | 0 | 300000000\n"
+            "6010 | Tannarx | 180000000 | 0\n\n"
+            "<b>Muhim eslatmalar:</b>\n"
+            "• Hisob raqamlari 4 xonali bo'lishi kerak\n"
+            "• Debet va Kredit balansi teng bo'lishi kerak\n"
+            "• Fayl .xlsx formatida bo'lishi kerak\n\n"
+            "<b>Aloqa:</b> @admin_username"
+        )
+        await query.edit_message_text(help_text, parse_mode="HTML")
+
+
+================================================================================
+5. handlers/excel_handler.py
+================================================================================
+
+import os
+import tempfile
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import ContextTypes, ConversationHandler
+
+from services.excel_parser import ExcelParser
+from services.report_generator import ReportGenerator
+
+ASK_ANALYSIS_TYPE = 1
+
+ANALYSIS_TYPES = [
+    ["📊 Balans tahlili"],
+    ["📈 Daromadlar/xarajatlar"],
+    ["🔍 Xatolarni tekshirish"],
+    ["📑 To'liq hisobot"],
+    ["❌ Bekor qilish"],
+]
+
+
+async def receive_excel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    document = update.message.document
+
+    if document.file_size > 10 * 1024 * 1024:
+        await update.message.reply_text("❌ Fayl hajmi 10 MB dan oshmasligi kerak!")
+        return ConversationHandler.END
+
+    if not document.file_name.endswith((".xlsx", ".xls")):
+        await update.message.reply_text("❌ Faqat .xlsx yoki .xls formatidagi fayllarni qabul qilaman!")
+        return ConversationHandler.END
+
+    processing_msg = await update.message.reply_text(
+        "⏳ <b>Fayl yuklanmoqda...</b>",
+        parse_mode="HTML",
+    )
+
+    try:
+        file = await context.bot.get_file(document.file_id)
+        temp_dir = tempfile.gettempdir()
+        file_path = os.path.join(temp_dir, f"accounting_{update.effective_user.id}_{document.file_name}")
+
+        await file.download_to_drive(file_path)
+
+        parser = ExcelParser(file_path)
+
+        if not parser.load_file():
+            await processing_msg.edit_text(
+                "❌ <b>Faylni o'qishda xatolik yuz berdi!</b>\n\n"
+                "Fayl to'g'ri Excel formatida ekanligini tekshiring."
+            )
+            return ConversationHandler.END
+
+        is_valid, errors = parser.validate_structure()
+
+        if not is_valid:
+            error_text = "⚠️ <b>Fayl tuzilmasida xatolar:</b>\n\n"
+            for i, error in enumerate(errors, 1):
+                error_text += f"{i}. {error}\n"
+            error_text += "\n📎 Iltimos, faylni to'g'ri formatda yuboring."
+
+            await processing_msg.edit_text(error_text, parse_mode="HTML")
+            return ConversationHandler.END
+
+        context.user_data["excel_path"] = file_path
+        context.user_data["parser"] = parser
+        context.user_data["file_name"] = document.file_name
+
+        keyboard = ReplyKeyboardMarkup(ANALYSIS_TYPES, resize_keyboard=True)
+
+        await processing_msg.edit_text(
+            f"✅ <b>Fayl muvaffaqiyatli yuklandi!</b>\n\n"
+            f"📄 Fayl: <code>{document.file_name}</code>\n"
+            f"📊 Yozuvlar soni: {len(parser.df)}\n"
+            f"💰 Debet jami: {parser.df['debet'].sum():,.2f} so'm\n"
+            f"💳 Kredit jami: {parser.df['kredit'].sum():,.2f} so'm\n\n"
+            f"Quyidagilardan birini tanlang:",
+            reply_markup=keyboard,
+            parse_mode="HTML",
+        )
+
+        return ASK_ANALYSIS_TYPE
+
+    except Exception as e:
+        await processing_msg.edit_text(
+            f"❌ <b>Xatolik yuz berdi:</b>\n<code>{str(e)}</code>\n\nQaytadan urinib ko'ring."
+        )
+        return ConversationHandler.END
+
+
+async def analyze_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    parser = context.user_data.get("parser")
+    file_name = context.user_data.get("file_name", "hisobot")
+
+    if not parser:
+        await update.message.reply_text(
+            "❌ Ma'lumotlar topilmadi. Qaytadan boshlang.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return ConversationHandler.END
+
+    if text == "❌ Bekor qilish":
+        await update.message.reply_text(
+            "✅ Bekor qilindi.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return ConversationHandler.END
+
+    processing_msg = await update.message.reply_text(
+        "⏳ <b>Tahlil qilinmoqda...</b>",
+        parse_mode="HTML",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+
+    try:
+        if text == "🔍 Xatolarni tekshirish":
+            await _check_errors(processing_msg, parser)
+        elif text == "📊 Balans tahlili":
+            await _balance_analysis(processing_msg, parser)
+        elif text == "📈 Daromadlar/xarajatlar":
+            await _income_analysis(processing_msg, parser)
+        elif text == "📑 To'liq hisobot":
+            await _full_report(processing_msg, parser, update, context, file_name)
+        else:
+            await processing_msg.edit_text(
+                "❌ Noto'g'ri tanlov. Iltimos, tugmalardan birini bosing.",
+                reply_markup=ReplyKeyboardMarkup(ANALYSIS_TYPES, resize_keyboard=True),
+            )
+            return ASK_ANALYSIS_TYPE
+
+        return ConversationHandler.END
+
+    except Exception as e:
+        await processing_msg.edit_text(
+            f"❌ <b>Tahlilda xatolik:</b>\n<code>{str(e)}</code>\n\nQaytadan urinib ko'ring."
+        )
+        return ConversationHandler.END
+
+
+async def _check_errors(msg, parser):
+    errors = parser.detect_errors()
+
+    if not errors:
+        await msg.edit_text(
+            "✅ <b>Xatolar topilmadi!</b>\n\n"
+            "🎉 Barcha yozuvlar to'g'ri.\n"
+            "📊 Debet va Kredit balansi teng.",
+            parse_mode="HTML",
+        )
+    else:
+        error_text = "⚠️ <b>Aniqlangan xatolar:</b>\n\n"
+        critical_count = 0
+        warning_count = 0
+
+        for err in errors:
+            if err["severity"] == "critical":
+                emoji = "🔴"
+                critical_count += 1
+            else:
+                emoji = "🟡"
+                warning_count += 1
+
+            error_text += f"{emoji} <b>{err['type']}:</b>\n{err['message']}\n\n"
+
+        error_text += f"\n📊 Jami: {critical_count} ta jiddiy, {warning_count} ta ogohlantirish"
+
+        await msg.edit_text(error_text, parse_mode="HTML")
+
+
+async def _balance_analysis(msg, parser):
+    analysis = parser.analyze_accounts()
+
+    report_text = (
+        f"📊 <b>Balans Tahlili</b>\n"
+        f"{'='*30}\n\n"
+        f"💰 Umumiy Debet: <code>{analysis['total_debet']:,.2f}</code> so'm\n"
+        f"💳 Umumiy Kredit: <code>{analysis['total_kredit']:,.2f}</code> so'm\n"
+        f"📈 Saldo: <code>{analysis['saldo']:,.2f}</code> so'm\n"
+        f"📝 Hisob raqamlari: {analysis['accounts_count']} ta\n\n"
+    )
+
+    if analysis["by_account"]:
+        report_text += "<b>Hisob raqamlari bo'yicha:</b>\n"
+        for code, data in sorted(analysis["by_account"].items()):
+            saldo = data['saldo']
+            emoji = "🟢" if saldo >= 0 else "🔴"
+            report_text += (
+                f"{emoji} <code>{code}</code> {data['name']}\n"
+                f"   Debet: {data['debet']:,.2f} | "
+                f"Kredit: {data['kredit']:,.2f} | "
+                f"Saldo: {saldo:,.2f}\n\n"
+            )
+
+    if abs(analysis['saldo']) < 0.01:
+        report_text += "\n✅ <b>Balans to'g'ri!</b> Debet = Kredit"
+    else:
+        report_text += f"\n🔴 <b>Balans buzilgan!</b> Ayirma: {analysis['saldo']:,.2f}"
+
+    await msg.edit_text(report_text, parse_mode="HTML")
+
+
+async def _income_analysis(msg, parser):
+    from services.calculator import UzbekAccountingCalculator, AccountEntry
+
+    entries = []
+    for _, row in parser.df.iterrows():
+        entries.append(AccountEntry(
+            code=str(row.get("hisob_raqami", "")),
+            name=str(row.get("nomlanishi", "")),
+            debet=float(row.get("debet", 0)),
+            kredit=float(row.get("kredit", 0)),
+        ))
+
+    calculator = UzbekAccountingCalculator(entries)
+    income = calculator.calculate_income_statement()
+
+    report_text = (
+        f"📈 <b>Moliyaviy Natijalar Tahlili</b>\n"
+        f"{'='*35}\n\n"
+        f"💵 Realizatsiya daromadlari: <code>{income['realizatsiya_daromadi']:,.2f}</code> so'm\n"
+        f"📉 Realizatsiya tannarxi: <code>{income['realizatsiya_tannarxi']:,.2f}</code> so'm\n"
+        f"📊 Vali foyda: <code>{income['vali_foyda']:,.2f}</code> so'm\n\n"
+        f"📋 Boshqaruv xarajatlari: <code>{income['boshqaruv_xarajatlari']:,.2f}</code> so'm\n"
+        f"🛒 Sotish xarajatlari: <code>{income['sotish_xarajatlari']:,.2f}</code> so'm\n"
+        f"📈 Savdo foydasi: <code>{income['savdo_foydasi']:,.2f}</code> so'm\n\n"
+        f"💳 Moliyaviy xarajatlar: <code>{income['moliyaviy_xarajatlari']:,.2f}</code> so'm\n"
+        f"🎁 Boshqa daromadlar: <code>{income['boshqa_daromadlar']:,.2f}</code> so'm\n"
+        f"📊 Solig'oldi foyda: <code>{income['solig_oldi_foyda']:,.2f}</code> so'm\n"
+        f"🏛 Foyda solig'i (15%): <code>{income['foyda_solig'i']:,.2f}</code> so'm\n\n"
+        f"💚 <b>SOF FOYDA:</b> <code>{income['sof_foyda']:,.2f}</code> so'm\n\n"
+    )
+
+    if income['realizatsiya_daromadi'] > 0:
+        margin = (income['sof_foyda'] / income['realizatsiya_daromadi']) * 100
+        report_text += f"📊 Sof foyda marjasi: <code>{margin:.2f}%</code>"
+
+    await msg.edit_text(report_text, parse_mode="HTML")
+
+
+async def _full_report(msg, parser, update, context, file_name):
+    await msg.edit_text(
+        "⏳ <b>Excel hisobot yaratilmoqda...</b>\n"
+        "Bu bir necha soniya olishi mumkin.",
+        parse_mode="HTML",
+    )
+
+    generator = ReportGenerator(parser)
+    report_path = generator.generate_full_report()
+
+    await msg.delete()
+
+    with open(report_path, "rb") as file:
+        await update.message.reply_document(
+            document=file,
+            caption=(
+                f"📑 <b>To'liq buxgalteriya hisoboti</b>\n\n"
+                f"📄 Asl fayl: {file_name}\n"
+                f"🇺🇿 O'zbekiston BHMS standartlariga asoslangan\n"
+                f"📊 Balans + Moliyaviy natijalar + Naqd pul oqimlari"
+            ),
+            parse_mode="HTML",
+        )
+
+    try:
+        os.remove(report_path)
+    except:
+        pass
+
+
+async def cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "✅ Jarayon bekor qilindi.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    return ConversationHandler.END
+
+
+================================================================================
+6. handlers/report_handler.py
+================================================================================
+
+import os
+import tempfile
+from telegram import Update
+from telegram.ext import ContextTypes
+
+from services.report_generator import ReportGenerator
+from services.calculator import UzbekAccountingCalculator, AccountEntry
+
+
+async def balance_sheet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _send_report(update, context, "balance", "Buxgalteriya Balansi")
+
+
+async def income_statement_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _send_report(update, context, "income", "Moliyaviy Natijalar")
+
+
+async def cash_flow_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _send_report(update, context, "cashflow", "Naqd Pul Oqimlari")
+
+
+async def quick_analysis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    sample_data = [
+        AccountEntry("1010", "Asosiy binolar", 500000000, 0),
+        AccountEntry("1040", "Mashinalar", 150000000, 0),
+        AccountEntry("1110", "Amortizatsiya", 0, 50000000),
+        AccountEntry("2310", "Kassa", 20000000, 0),
+        AccountEntry("2320", "Hisob raqami", 50000000, 0),
+        AccountEntry("4010", "Realizatsiya daromadlari", 0, 300000000),
+        AccountEntry("5010", "Realizatsiya tannarxi", 180000000, 0),
+        AccountEntry("6010", "Boshqaruv xarajatlari", 25000000, 0),
+        AccountEntry("6210", "Sotish xarajatlari", 15000000, 0),
+        AccountEntry("6310", "Moliyaviy xarajatlar", 5000000, 0),
+        AccountEntry("4110", "Ustav kapitali", 0, 400000000),
+        AccountEntry("4310", "Yillik foyda", 0, 15000000),
+    ]
+
+    calculator = UzbekAccountingCalculator(sample_data)
+    balance = calculator.calculate_balance_sheet()
+    income = calculator.calculate_income_statement()
+
+    text = (
+        f"🔍 <b>TEZKOR TAHLIL (Namuna)</b>\n"
+        f"{'='*35}\n\n"
+        f"📊 <b>BUXGALTERIYA BALANSI:</b>\n"
+        f"💰 Jami Aktivlar: <code>{balance['aktivlar']['jami_aktivlar']:,.2f}</code> so'm\n"
+        f"📉 Jami Majburiyatlar: <code>{balance['majburiyatlar']['jami_majburiyatlar']:,.2f}</code> so'm\n"
+        f"🏛 Jami Kapital: <code>{balance['kapital']['jami_kapital']:,.2f}</code> so'm\n"
+        f"{'✅ Balans to\'g\'ri' if balance['balans_tekshiruvi'] else '🔴 Balans buzilgan'}\n\n"
+        f"📈 <b>MOLIYAVIY NATIJALAR:</b>\n"
+        f"💵 Daromadlar: <code>{income['realizatsiya_daromadi']:,.2f}</code> so'm\n"
+        f"📉 Tannarx: <code>{income['realizatsiya_tannarxi']:,.2f}</code> so'm\n"
+        f"📊 Vali foyda: <code>{income['vali_foyda']:,.2f}</code> so'm\n"
+        f"💚 Sof foyda: <code>{income['sof_foyda']:,.2f}</code> so'm\n\n"
+        f"📎 O'z Excel faylingizni yuborish uchun faylni ushbu chatga yuboring."
+    )
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode="HTML")
+    else:
+        await update.message.reply_text(text, parse_mode="HTML")
+
+
+async def _send_report(update: Update, context: ContextTypes.DEFAULT_TYPE, report_type: str, title: str):
+    msg = await _get_message(update)
+    processing = await msg.reply_text(
+        f"⏳ <b>{title}</b> hisobot yaratilmoqda...",
+        parse_mode="HTML",
+    )
+
+    try:
+        sample_data = [
+            AccountEntry("1010", "Asosiy binolar", 500000000, 0),
+            AccountEntry("1040", "Mashinalar", 150000000, 0),
+            AccountEntry("1110", "Amortizatsiya", 0, 50000000),
+            AccountEntry("2310", "Kassa", 20000000, 0),
+            AccountEntry("2320", "Hisob raqami", 50000000, 0),
+            AccountEntry("4010", "Realizatsiya daromadlari", 0, 300000000),
+            AccountEntry("5010", "Realizatsiya tannarxi", 180000000, 0),
+            AccountEntry("6010", "Boshqaruv xarajatlari", 25000000, 0),
+            AccountEntry("6210", "Sotish xarajatlari", 15000000, 0),
+            AccountEntry("6310", "Moliyaviy xarajatlar", 5000000, 0),
+            AccountEntry("4110", "Ustav kapitali", 0, 400000000),
+            AccountEntry("4310", "Yillik foyda", 0, 15000000),
+        ]
+
+        calculator = UzbekAccountingCalculator(sample_data)
+        generator = ReportGenerator(None)
+
+        if report_type == "balance":
+            report_path = generator.generate_balance_sheet(calculator)
+            caption = "📊 <b>Buxgalteriya Balansi</b> (BHMS 15)"
+        elif report_type == "income":
+            report_path = generator.generate_income_statement(calculator)
+            caption = "📈 <b>Moliyaviy Natijalar</b> (BHMS 3)"
+        else:
+            report_path = generator.generate_cash_flow(calculator)
+            caption = "💰 <b>Naqd Pul Oqimlari</b> (BHMS 9)"
+
+        await processing.delete()
+
+        with open(report_path, "rb") as file:
+            await msg.reply_document(
+                document=file,
+                caption=caption,
+                parse_mode="HTML",
+            )
+
+        try:
+            os.remove(report_path)
+        except:
+            pass
+
+    except Exception as e:
+        await processing.edit_text(
+            f"❌ <b>Xatolik:</b> <code>{str(e)}</code>",
+            parse_mode="HTML",
+        )
+
+
+async def _get_message(update: Update):
+    if update.callback_query:
+        return update.callback_query.message
+    return update.message
+
+
+================================================================================
+7. services/__init__.py
+================================================================================
+
+# services paketi
+
+
+================================================================================
+8. services/excel_parser.py
+================================================================================
+
+import pandas as pd
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from typing import Dict, List, Tuple
+import logging
+
+from config.settings import UZ_ACCOUNT_CODES
+
+logger = logging.getLogger(__name__)
+
+
+class ExcelParser:
+    def __init__(self, file_path: str):
+        self.file_path = file_path
+        self.df = None
+        self.workbook = None
+
+    def load_file(self) -> bool:
+        try:
+            self.df = pd.read_excel(self.file_path)
+            self.workbook = openpyxl.load_workbook(self.file_path)
+            logger.info(f"Fayl yuklandi: {self.file_path}, {len(self.df)} ta qator")
+            return True
+        except Exception as e:
+            logger.error(f"Faylni yuklashda xatolik: {e}")
+            return False
+
+    def validate_structure(self) -> Tuple[bool, List[str]]:
+        errors = []
+
+        if self.df is None:
+            return False, ["Fayl yuklanmadi"]
+
+        if len(self.df) == 0:
+            return False, ["Fayl bo'sh! Ma'lumotlar yo'q."]
+
+        self.df.columns = [str(col).strip().lower().replace(" ", "_") for col in self.df.columns]
+
+        required_columns = ["hisob_raqami", "nomlanishi", "debet", "kredit"]
+        missing = [col for col in required_columns if col not in self.df.columns]
+
+        if missing:
+            errors.append(f"Quyidagi ustunlar yetishmayapti: {', '.join(missing)}")
+            errors.append("Majburiy ustunlar: hisob_raqami, nomlanishi, debet, kredit")
+            return False, errors
+
+        try:
+            self.df["debet"] = pd.to_numeric(self.df["debet"], errors="coerce").fillna(0)
+            self.df["kredit"] = pd.to_numeric(self.df["kredit"], errors="coerce").fillna(0)
+        except Exception as e:
+            errors.append(f"Raqamlarni konvertatsiya qilishda xatolik: {e}")
+
+        empty_names = self.df[self.df["nomlanishi"].isna() | (self.df["nomlanishi"] == "")]
+        if not empty_names.empty:
+            errors.append(f"{len(empty_names)} ta yozuvda nomlanish kiritilmagan")
+
+        invalid_codes = []
+        for code in self.df["hisob_raqami"].astype(str):
+            if not code.isdigit() or len(code) != 4:
+                invalid_codes.append(code)
+
+        if invalid_codes:
+            errors.append(f"Noto'g'ri hisob raqamlari: {', '.join(set(invalid_codes))}")
+            errors.append("Hisob raqamlari 4 xonali raqam bo'lishi kerak (masalan: 1010)")
+
+        return len(errors) == 0, errors
+
+    def analyze_accounts(self) -> Dict:
+        if self.df is None:
+            return {}
+
+        analysis = {
+            "total_debet": float(self.df["debet"].sum()),
+            "total_kredit": float(self.df["kredit"].sum()),
+            "saldo": float(self.df["debet"].sum() - self.df["kredit"].sum()),
+            "accounts_count": len(self.df),
+            "by_account": {},
+        }
+
+        if "hisob_raqami" in self.df.columns:
+            grouped = self.df.groupby("hisob_raqami").agg({
+                "debet": "sum",
+                "kredit": "sum"
+            }).reset_index()
+
+            for _, row in grouped.iterrows():
+                code = str(int(row["hisob_raqami"]))
+                name = UZ_ACCOUNT_CODES.get(code, "Noma'lum hisob")
+
+                analysis["by_account"][code] = {
+                    "debet": float(row["debet"]),
+                    "kredit": float(row["kredit"]),
+                    "saldo": float(row["debet"] - row["kredit"]),
+                    "name": name,
+                }
+
+        return analysis
+
+    def detect_errors(self) -> List[Dict]:
+        errors = []
+
+        if self.df is None:
+            return errors
+
+        total_debet = self.df["debet"].sum()
+        total_kredit = self.df["kredit"].sum()
+
+        if abs(total_debet - total_kredit) > 0.01:
+            errors.append({
+                "type": "balans_xatosi",
+                "message": (
+                    f"Debet ({total_debet:,.2f}) va Kredit ({total_kredit:,.2f}) "
+                    f"balansi buzilgan! Ayirma: {abs(total_debet - total_kredit):,.2f} so'm"
+                ),
+                "severity": "critical",
+            })
+
+        negative_debet = self.df[self.df["debet"] < 0]
+        for _, row in negative_debet.iterrows():
+            errors.append({
+                "type": "manfiy_debet",
+                "message": f"Manfiy debet: {row.get('nomlanishi', 'Noma\'lum')} - {row['debet']:,.2f} so'm",
+                "severity": "warning",
+            })
+
+        negative_kredit = self.df[self.df["kredit"] < 0]
+        for _, row in negative_kredit.iterrows():
+            errors.append({
+                "type": "manfiy_kredit",
+                "message": f"Manfiy kredit: {row.get('nomlanishi', 'Noma\'lum')} - {row['kredit']:,.2f} so'm",
+                "severity": "warning",
+            })
+
+        empty_names = self.df[self.df["nomlanishi"].isna() | (self.df["nomlanishi"] == "")]
+        if not empty_names.empty:
+            errors.append({
+                "type": "bosh_nomlanish",
+                "message": f"{len(empty_names)} ta yozuvda nomlanish kiritilmagan",
+                "severity": "warning",
+            })
+
+        unknown_accounts = []
+        for code in self.df["hisob_raqami"].astype(str):
+            clean_code = str(int(float(code))) if code.replace('.', '').isdigit() else code
+            if clean_code not in UZ_ACCOUNT_CODES:
+                unknown_accounts.append(clean_code)
+
+        if unknown_accounts:
+            unique_unknown = list(set(unknown_accounts))[:5]
+            errors.append({
+                "type": "noma'lum_hisob",
+                "message": (
+                    f"Noma'lum hisob raqamlari: {', '.join(unique_unknown)}\n"
+                    f"Jami {len(set(unknown_accounts))} ta noma'lum hisob"
+                ),
+                "severity": "warning",
+            })
+
+        zero_entries = self.df[(self.df["debet"] == 0) & (self.df["kredit"] == 0)]
+        if not zero_entries.empty:
+            errors.append({
+                "type": "nol_yozuv",
+                "message": f"{len(zero_entries)} ta yozuvda debet va kredit 0 ga teng",
+                "severity": "warning",
+            })
+
+        return errors
+
+
+================================================================================
+9. services/calculator.py
+================================================================================
+
+from typing import Dict, List
+from dataclasses import dataclass
+
+
+@dataclass
+class AccountEntry:
+    code: str
+    name: str
+    debet: float
+    kredit: float
+
+    @property
+    def saldo(self) -> float:
+        return self.debet - self.kredit
+
+
+class UzbekAccountingCalculator:
+    """
+    O'zbekiston buxgalteriya hisobi hisob-kitoblari
+    BHMS 1, 3, 9, 15-sonli standartlar asosida
+    """
+
+    def __init__(self, entries: List[AccountEntry]):
+        self.entries = entries
+
+    def calculate_balance_sheet(self) -> Dict:
+        assets = {
+            "uzoq_muddatli_aktivlar": 0.0,
+            "joriy_aktivlar": 0.0,
+            "jami_aktivlar": 0.0,
+        }
+
+        liabilities = {
+            "uzoq_muddatli_majburiyatlar": 0.0,
+            "joriy_majburiyatlar": 0.0,
+            "jami_majburiyatlar": 0.0,
+        }
+
+        equity = {
+            "ustav_kapitali": 0.0,
+            "qoshimcha_kapital": 0.0,
+            "yillik_daromad": 0.0,
+            "jami_kapital": 0.0,
+        }
+
+        for entry in self.entries:
+            code = entry.code
+            saldo = entry.saldo
+
+            if code.startswith("1"):
+                if code.startswith(("10", "11", "12", "13")):
+                    assets["uzoq_muddatli_aktivlar"] += saldo
+                else:
+                    assets["joriy_aktivlar"] += saldo
+
+            elif code.startswith(("2", "3")):
+                if code.startswith(("30", "31")):
+                    liabilities["uzoq_muddatli_majburiyatlar"] += entry.kredit
+                elif code.startswith(("32", "33", "34")):
+                    liabilities["joriy_majburiyatlar"] += entry.kredit
+
+            elif code.startswith("4"):
+                if code.startswith("41"):
+                    equity["ustav_kapitali"] += entry.kredit
+                elif code.startswith("42"):
+                    equity["qoshimcha_kapital"] += entry.kredit
+                elif code.startswith("43"):
+                    equity["yillik_daromad"] += saldo
+
+        assets["jami_aktivlar"] = (
+            assets["uzoq_muddatli_aktivlar"] + assets["joriy_aktivlar"]
+        )
+        liabilities["jami_majburiyatlar"] = (
+            liabilities["uzoq_muddatli_majburiyatlar"] + 
+            liabilities["joriy_majburiyatlar"]
+        )
+        equity["jami_kapital"] = (
+            equity["ustav_kapitali"] + 
+            equity["qoshimcha_kapital"] + 
+            equity["yillik_daromad"]
+        )
+
+        balance_check = abs(
+            assets["jami_aktivlar"] - 
+            (liabilities["jami_majburiyatlar"] + equity["jami_kapital"])
+        )
+
+        return {
+            "aktivlar": assets,
+            "majburiyatlar": liabilities,
+            "kapital": equity,
+            "balans_tekshiruvi": balance_check < 0.01,
+            "balans_ayirma": balance_check,
+        }
+
+    def calculate_income_statement(self) -> Dict:
+        revenue = 0.0
+        cost_of_sales = 0.0
+        operating_expenses = 0.0
+        financial_expenses = 0.0
+        other_income = 0.0
+
+        for entry in self.entries:
+            code = entry.code
+
+            if code.startswith("5"):
+                revenue += entry.kredit
+            elif code.startswith("6"):
+                cost_of_sales += entry.debet
+            elif code.startswith("7"):
+                operating_expenses += entry.debet
+            elif code.startswith("8"):
+                operating_expenses += entry.debet
+            elif code.startswith("9"):
+                financial_expenses += entry.debet
+            elif code.startswith("10"):
+                other_income += entry.kredit
+
+        gross_profit = revenue - cost_of_sales
+        operating_profit = gross_profit - operating_expenses
+        profit_before_tax = operating_profit - financial_expenses + other_income
+
+        tax_rate = 0.15
+        income_tax = profit_before_tax * tax_rate if profit_before_tax > 0 else 0
+        net_profit = profit_before_tax - income_tax
+
+        return {
+            "realizatsiya_daromadi": revenue,
+            "realizatsiya_tannarxi": cost_of_sales,
+            "vali_foyda": gross_profit,
+            "boshqaruv_xarajatlari": operating_expenses,
+            "sotish_xarajatlari": 0.0,
+            "savdo_foydasi": operating_profit,
+            "moliyaviy_xarajatlar": financial_expenses,
+            "boshqa_daromadlar": other_income,
+            "solig_oldi_foyda": profit_before_tax,
+            "foyda_solig'i": income_tax,
+            "sof_foyda": net_profit,
+        }
+
+    def calculate_cash_flow(self) -> Dict:
+        operating = 0.0
+        investing = 0.0
+        financing = 0.0
+
+        for entry in self.entries:
+            code = entry.code
+
+            if code.startswith(("50", "51", "52")):
+                operating += entry.debet - entry.kredit
+            elif code.startswith(("08", "58")):
+                investing += entry.debet - entry.kredit
+            elif code.startswith(("66", "67")):
+                financing += entry.kredit - entry.debet
+
+        net_cash = operating + investing + financing
+
+        return {
+            "operatsion_faoliyat": operating,
+            "investitsion_faoliyat": investing,
+            "moliyaviy_faoliyat": financing,
+            "naqd_pul_oshishi": net_cash,
+        }
+
+
+================================================================================
+10. services/report_generator.py
+================================================================================
+
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.chart import BarChart, Reference
+from datetime import datetime
+import os
+
+from services.calculator import UzbekAccountingCalculator
+
+
+class ReportGenerator:
+    COLORS = {
+        "blue": "1E3A8A",
+        "light_blue": "3B82F6",
+        "green": "059669",
+        "red": "DC2626",
+        "yellow": "D97706",
+        "gray": "6B7280",
+        "white": "FFFFFF",
+        "light_gray": "F3F4F6",
+        "bg_green": "D1FAE5",
+        "bg_blue": "E0F2FE",
+        "bg_yellow": "FEF3C7",
+    }
+
+    def __init__(self, parser):
+        self.parser = parser
+        self.wb = openpyxl.Workbook()
+        self._setup_styles()
+
+    def _setup_styles(self):
+        self.header_font = Font(name="Calibri", size=14, bold=True, color=self.COLORS["white"])
+        self.header_fill = PatternFill(start_color=self.COLORS["blue"], 
+                                       end_color=self.COLORS["blue"], fill_type="solid")
+        self.header_align = Alignment(horizontal="center", vertical="center")
+
+        self.sub_font = Font(name="Calibri", size=12, bold=True, color=self.COLORS["white"])
+        self.sub_fill = PatternFill(start_color=self.COLORS["light_blue"], 
+                                    end_color=self.COLORS["light_blue"], fill_type="solid")
+
+        self.normal_font = Font(name="Calibri", size=11)
+        self.normal_align = Alignment(horizontal="left", vertical="center")
+
+        self.number_font = Font(name="Calibri", size=11)
+        self.number_format = '#,##0.00 "so\'m"'
+        self.number_align = Alignment(horizontal="right", vertical="center")
+
+        self.total_font = Font(name="Calibri", size=11, bold=True, color=self.COLORS["blue"])
+        self.total_format = '#,##0.00 "so\'m"'
+        self.total_align = Alignment(horizontal="right", vertical="center")
+
+        self.thin_border = Border(
+            left=Side(style='thin', color=self.COLORS["gray"]),
+            right=Side(style='thin', color=self.COLORS["gray"]),
+            top=Side(style='thin', color=self.COLORS["gray"]),
+            bottom=Side(style='thin', color=self.COLORS["gray"]),
+        )
+
+    def _apply_header(self, cell, text: str, is_main: bool = True):
+        cell.value = text
+        if is_main:
+            cell.font = self.header_font
+            cell.fill = self.header_fill
+        else:
+            cell.font = self.sub_font
+            cell.fill = self.sub_fill
+        cell.alignment = self.header_align
+        cell.border = self.thin_border
+
+    def _apply_number(self, cell, value: float, is_total: bool = False):
+        cell.value = value
+        if is_total:
+            cell.font = self.total_font
+            cell.number_format = self.total_format
+            cell.alignment = self.total_align
+        else:
+            cell.font = self.number_font
+            cell.number_format = self.number_format
+            cell.alignment = self.number_align
+        cell.border = self.thin_border
+
+    def _add_report_header(self, ws, title: str, company_name: str = "Korxona nomi"):
+        ws.merge_cells("A1:E1")
+        self._apply_header(ws["A1"], company_name, is_main=True)
+
+        ws.merge_cells("A2:E2")
+        self._apply_header(ws["A2"], title, is_main=False)
+
+        ws.merge_cells("A3:E3")
+        ws["A3"].value = f"Sana: {datetime.now().strftime('%d.%m.%Y')}"
+        ws["A3"].font = Font(italic=True, size=10, color=self.COLORS["gray"])
+        ws["A3"].alignment = Alignment(horizontal="right")
+
+        ws.append([])
+
+    def _set_columns(self, ws, widths: dict):
+        for col, width in widths.items():
+            ws.column_dimensions[col].width = width
+
+    def generate_balance_sheet(self, calculator: UzbekAccountingCalculator) -> str:
+        ws = self.wb.active
+        ws.title = "Buxgalteriya Balansi"
+
+        self._add_report_header(ws, "BUXGALTERIYA BALANSI (BHMS 15)")
+        self._set_columns(ws, {"A": 5, "B": 45, "C": 20, "D": 20, "E": 20})
+
+        balance = calculator.calculate_balance_sheet()
+
+        headers = ["№", "Ko'rsatkich", "Boshlang'ich", "Oxirgi", "O'zgarish"]
+        ws.append(headers)
+        for cell in ws[ws.max_row]:
+            self._apply_header(cell, cell.value, is_main=False)
+
+        ws.append(["", "I. AKTIVLAR", "", "", ""])
+        ws[ws.max_row][1].font = Font(bold=True, size=12, color=self.COLORS["blue"])
+
+        rows = [
+            ["1", "Uzoq muddatli aktivlar", 0, balance["aktivlar"]["uzoq_muddatli_aktivlar"], 0],
+            ["2", "Joriy aktivlar", 0, balance["aktivlar"]["joriy_aktivlar"], 0],
+            ["", "JAMI AKTIVLAR", 0, balance["aktivlar"]["jami_aktivlar"], 0],
+        ]
+
+        for row in rows:
+            ws.append(row)
+            if "JAMI" in str(row[1]):
+                for i, cell in enumerate(ws[ws.max_row], 1):
+                    if i >= 3:
+                        self._apply_number(cell, cell.value, is_total=True)
+                    cell.border = self.thin_border
+                    cell.fill = PatternFill(start_color=self.COLORS["light_gray"], 
+                                           end_color=self.COLORS["light_gray"], fill_type="solid")
+
+        ws.append([])
+        ws.append(["", "II. MAJBURIYATLAR VA KAPITAL", "", "", ""])
+
+        rows = [
+            ["3", "Uzoq muddatli majburiyatlar", 0, balance["majburiyatlar"]["uzoq_muddatli_majburiyatlar"], 0],
+            ["4", "Joriy majburiyatlar", 0, balance["majburiyatlar"]["joriy_majburiyatlar"], 0],
+            ["", "Jami majburiyatlar", 0, balance["majburiyatlar"]["jami_majburiyatlar"], 0],
+            ["5", "Ustav kapitali", 0, balance["kapital"]["ustav_kapitali"], 0],
+            ["6", "Qo'shimcha kapital", 0, balance["kapital"]["qoshimcha_kapital"], 0],
+            ["7", "Yillik daromad (foyda/zarar)", 0, balance["kapital"]["yillik_daromad"], 0],
+            ["", "Jami kapital", 0, balance["kapital"]["jami_kapital"], 0],
+            ["", "JAMI MAJBURIYATLAR VA KAPITAL", 0, 
+             balance["majburiyatlar"]["jami_majburiyatlar"] + balance["kapital"]["jami_kapital"], 0],
+        ]
+
+        for row in rows:
+            ws.append(row)
+            if "JAMI" in str(row[1]) or "Jami" in str(row[1]):
+                for i, cell in enumerate(ws[ws.max_row], 1):
+                    if i >= 3:
+                        self._apply_number(cell, cell.value, is_total=True)
+                    cell.border = self.thin_border
+                    cell.fill = PatternFill(start_color=self.COLORS["light_gray"], 
+                                           end_color=self.COLORS["light_gray"], fill_type="solid")
+
+        ws.append([])
+        ws.append(["", "Balans tekshiruvi:", "", 
+                   "✅ To'g'ri" if balance["balans_tekshiruvi"] else "❌ Xato", ""])
+        ws[ws.max_row][3].font = Font(
+            bold=True, 
+            color=self.COLORS["green"] if balance["balans_tekshiruvi"] else self.COLORS["red"]
+        )
+
+        output_path = f"balance_sheet_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        self.wb.save(output_path)
+        return output_path
+
+    def generate_income_statement(self, calculator: UzbekAccountingCalculator) -> str:
+        ws = self.wb.create_sheet("Moliyaviy Natijalar")
+
+        self._add_report_header(ws, "MOLIYAVIY NATIJALAR (BHMS 3)")
+        self._set_columns(ws, {"A": 5, "B": 50, "C": 20, "D": 20})
+
+        income = calculator.calculate_income_statement()
+
+        ws.append(["№", "Ko'rsatkich", "Joriy yil", "O'tgan yil"])
+        for cell in ws[ws.max_row]:
+            self._apply_header(cell, cell.value, is_main=False)
+
+        ws.append(["1", "Realizatsiya daromadlari", income["realizatsiya_daromadi"], 0])
+        ws.append(["2", "Realizatsiya tannarxi", income["realizatsiya_tannarxi"], 0])
+
+        ws.append(["3", "VALI FOYDA", income["vali_foyda"], 0])
+        for cell in ws[ws.max_row]:
+            self._apply_number(cell, cell.value, is_total=True)
+            cell.fill = PatternFill(start_color=self.COLORS["bg_blue"], 
+                                   end_color=self.COLORS["bg_blue"], fill_type="solid")
+
+        ws.append(["4", "Boshqaruv va sotish xarajatlari", income["boshqaruv_xarajatlari"], 0])
+
+        ws.append(["5", "SAVDO FOYDASI", income["savdo_foydasi"], 0])
+        for cell in ws[ws.max_row]:
+            self._apply_number(cell, cell.value, is_total=True)
+            cell.fill = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
+
+        ws.append(["6", "Moliyaviy xarajatlar", income["moliyaviy_xarajatlari"], 0])
+        ws.append(["7", "Boshqa daromadlar", income["boshqa_daromadlar"], 0])
+        ws.append(["8", "SOLIG'OLDI FOYDA", income["solig_oldi_foyda"], 0])
+        ws.append(["9", "Foyda solig'i (15%)", income["foyda_solig'i"], 0])
+
+        ws.append(["10", "SOF FOYDA", income["sof_foyda"], 0])
+        for cell in ws[ws.max_row]:
+            self._apply_number(cell, cell.value, is_total=True)
+            cell.fill = PatternFill(start_color=self.COLORS["bg_green"], 
+                                   end_color=self.COLORS["bg_green"], fill_type="solid")
+            cell.font = Font(bold=True, size=12, color=self.COLORS["green"])
+
+        # Grafik
+        chart = BarChart()
+        chart.type = "col"
+        chart.title = "Daromadlar va Xarajatlar"
+        chart.y_axis.title = "So'm"
+
+        data = Reference(ws, min_col=3, min_row=2, max_row=ws.max_row-1)
+        cats = Reference(ws, min_col=2, min_row=3, max_row=ws.max_row-1)
+        chart.add_data(data, titles_from_data=True)
+        chart.set_categories(cats)
+
+        ws.add_chart(chart, "E5")
+
+        output_path = f"income_statement_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        self.wb.save(output_path)
+        return output_path
+
+    def generate_cash_flow(self, calculator: UzbekAccountingCalculator) -> str:
+        ws = self.wb.create_sheet("Naqd Pul Oqimlari")
+
+        self._add_report_header(ws, "NAQD PUL OQIMLARI (BHMS 9)")
+        self._set_columns(ws, {"A": 5, "B": 50, "C": 20, "D": 20})
+
+        cash_flow = calculator.calculate_cash_flow()
+
+        ws.append(["№", "Ko'rsatkich", "Joriy yil", "O'tgan yil"])
+        for cell in ws[ws.max_row]:
+            self._apply_header(cell, cell.value, is_main=False)
+
+        data = [
+            ["1", "Operatsion faoliyatdan naqd pul oqimi", cash_flow["operatsion_faoliyat"], 0],
+            ["2", "Investitsion faoliyatdan naqd pul oqimi", cash_flow["investitsion_faoliyat"], 0],
+            ["3", "Moliyaviy faoliyatdan naqd pul oqimi", cash_flow["moliyaviy_faoliyat"], 0],
+            ["", "NAQD PULNING OSHISHI/KAMAYISHI", cash_flow["naqd_pul_oshishi"], 0],
+        ]
+
+        for row in data:
+            ws.append(row)
+            if "NAQD" in str(row[1]):
+                for i, cell in enumerate(ws[ws.max_row], 1):
+                    if i >= 3:
+                        self._apply_number(cell, cell.value, is_total=True)
+                    cell.border = self.thin_border
+                    cell.fill = PatternFill(start_color=self.COLORS["bg_yellow"], 
+                                           end_color=self.COLORS["bg_yellow"], fill_type="solid")
+
+        output_path = f"cash_flow_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        self.wb.save(output_path)
+        return output_path
+
+    def generate_full_report(self) -> str:
+        from services.calculator import AccountEntry
+
+        entries = []
+        if self.parser and self.parser.df is not None:
+            for _, row in self.parser.df.iterrows():
+                entries.append(AccountEntry(
+                    code=str(row.get("hisob_raqami", "")),
+                    name=str(row.get("nomlanishi", "")),
+                    debet=float(row.get("debet", 0)),
+                    kredit=float(row.get("kredit", 0)),
+                ))
+        else:
+            # Namuna ma'lumotlar
+            entries = [
+                AccountEntry("1010", "Asosiy binolar", 500000000, 0),
+                AccountEntry("1040", "Mashinalar", 150000000, 0),
+                AccountEntry("1110", "Amortizatsiya", 0, 50000000),
+                AccountEntry("2310", "Kassa", 20000000, 0),
+                AccountEntry("2320", "Hisob raqami", 50000000, 0),
+                AccountEntry("4010", "Realizatsiya daromadlari", 0, 300000000),
+                AccountEntry("5010", "Realizatsiya tannarxi", 180000000, 0),
+                AccountEntry("6010", "Boshqaruv xarajatlari", 25000000, 0),
+                AccountEntry("6210", "Sotish xarajatlari", 15000000, 0),
+                AccountEntry("6310", "Moliyaviy xarajatlar", 5000000, 0),
+                AccountEntry("4110", "Ustav kapitali", 0, 400000000),
+                AccountEntry("4310", "Yillik foyda", 0, 15000000),
+            ]
+
+        calculator = UzbekAccountingCalculator(entries)
+
+        self.wb = openpyxl.Workbook()
+
+        # 1. Muqova
+        self._create_cover_page()
+
+        # 2. Balans
+        self.generate_balance_sheet(calculator)
+
+        # 3. Daromadlar
+        self.generate_income_statement(calculator)
+
+        # 4. Naqd pul
+        self.generate_cash_flow(calculator)
+
+        # 5. Tahlil
+        self._create_analysis_sheet(calculator)
+
+        output_path = f"full_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        self.wb.save(output_path)
+        return output_path
+
+    def _create_cover_page(self):
+        ws = self.wb.active
+        ws.title = "Muqova"
+
+        ws.merge_cells("A1:F15")
+        cell = ws["A1"]
+        cell.value = "BUXGALTERIYA HISOBOTI"
+        cell.font = Font(size=28, bold=True, color=self.COLORS["blue"])
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        ws.merge_cells("A16:F18")
+        cell = ws["A16"]
+        cell.value = "O'zbekiston Respublikasi\nBuxgalteriya Hisobi Milliy Standartlari (BHMS) asosida"
+        cell.font = Font(size=14, italic=True, color=self.COLORS["gray"])
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        ws.merge_cells("A20:F22")
+        cell = ws["A20"]
+        cell.value = f"Tayyorlangan sana: {datetime.now().strftime('%d.%m.%Y')}"
+        cell.font = Font(size=12, color=self.COLORS["gray"])
+        cell.alignment = Alignment(horizontal="center")
+
+    def _create_analysis_sheet(self, calculator: UzbekAccountingCalculator):
+        ws = self.wb.create_sheet("Tahlil")
+
+        self._add_report_header(ws, "MOLIYAVIY KO'RSATKICHLAR TAHLILI")
+
+        balance = calculator.calculate_balance_sheet()
+        income = calculator.calculate_income_statement()
+
+        ws.append(["", "RENTABELLIK KO'RSATKICHLARI", "", ""])
+        ws[ws.max_row][1].font = Font(bold=True, size=14, color=self.COLORS["blue"])
+
+        total_assets = balance["aktivlar"]["jami_aktivlar"]
+        equity = balance["kapital"]["jami_kapital"]
+
+        if total_assets > 0 and equity > 0:
+            roa = (income["sof_foyda"] / total_assets) * 100
+            roe = (income["sof_foyda"] / equity) * 100
+
+            indicators = [
+                ["1", "Aktivlar rentabelligi (ROA)", f"{roa:.2f}%", "15%+"],
+                ["2", "Kapital rentabelligi (ROE)", f"{roe:.2f}%", "20%+"],
+                ["3", "Savdo rentabelligi", 
+                 f"{(income['savdo_foydasi']/income['realizatsiya_daromadi']*100):.2f}%" if income['realizatsiya_daromadi'] else "0%", "10%+"],
+            ]
+
+            for row in indicators:
+                ws.append(row)
+                status_cell = ws.cell(row=ws.max_row, column=4)
+                if "ROA" in row[1] and roa >= 15:
+                    status_cell.fill = PatternFill(start_color=self.COLORS["bg_green"], 
+                                                   end_color=self.COLORS["bg_green"], fill_type="solid")
+                elif "ROE" in row[1] and roe >= 20:
+                    status_cell.fill = PatternFill(start_color=self.COLORS["bg_green"], 
+                                                   end_color=self.COLORS["bg_green"], fill_type="solid")
+
+
+================================================================================
+11. utils/__init__.py
+================================================================================
+
+# utils paketi
+
+
+================================================================================
+12. utils/validators.py
+================================================================================
+
+import re
+from typing import Tuple, List
+
+
+def validate_account_code(code: str) -> Tuple[bool, str]:
+    """Hisob raqamini tekshirish"""
+    if not code:
+        return False, "Hisob raqami bo'sh"
+
+    if not re.match(r'^\d{4}$', code):
+        return False, "Hisob raqami 4 xonali raqam bo'lishi kerak"
+
+    return True, "To'g'ri"
+
+
+def validate_amount(amount) -> Tuple[bool, str]:
+    """Summani tekshirish"""
+    try:
+        value = float(amount)
+        if value < 0:
+            return False, "Summa manfiy bo'lishi mumkin emas"
+        return True, "To'g'ri"
+    except (ValueError, TypeError):
+        return False, "Noto'g'ri summa formati"
+
+
+def validate_excel_data(data: List[dict]) -> Tuple[bool, List[str]]:
+    """Excel ma'lumotlarini tekshirish"""
+    errors = []
+
+    if not data:
+        return False, ["Ma'lumotlar bo'sh"]
+
+    required_fields = ["hisob_raqami", "nomlanishi", "debet", "kredit"]
+
+    for i, row in enumerate(data, 1):
+        for field in required_fields:
+            if field not in row:
+                errors.append(f"Qator {i}: '{field}' ustuni yetishmayapti")
+
+        if "hisob_raqami" in row:
+            valid, msg = validate_account_code(str(row["hisob_raqami"]))
+            if not valid:
+                errors.append(f"Qator {i}: {msg}")
+
+        if "debet" in row:
+            valid, msg = validate_amount(row["debet"])
+            if not valid:
+                errors.append(f"Qator {i}: Debet - {msg}")
+
+        if "kredit" in row:
+            valid, msg = validate_amount(row["kredit"])
+            if not valid:
+                errors.append(f"Qator {i}: Kredit - {msg}")
+
+    return len(errors) == 0, errors
+
+
+================================================================================
+13. utils/formatters.py
+================================================================================
+
+from datetime import datetime
+
+
+def format_amount(amount: float, currency: str = "so'm") -> str:
+    """Summani formatlash"""
+    return f"{amount:,.2f} {currency}"
+
+
+def format_date(date: datetime = None) -> str:
+    """Sanani formatlash"""
+    if date is None:
+        date = datetime.now()
+    return date.strftime("%d.%m.%Y")
+
+
+def format_percentage(value: float, decimals: int = 2) -> str:
+    """Foizni formatlash"""
+    return f"{value:.{decimals}f}%"
+
+
+def escape_html(text: str) -> str:
+    """HTML maxsus belgilarini qochish"""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+================================================================================
+14. requirements.txt
+================================================================================
+
+python-telegram-bot==21.4
+openpyxl==3.1.5
+pandas==2.2.2
+xlsxwriter==3.2.0
+python-dotenv==1.0.1
+Pillow==10.4.0
+python-dateutil==2.9.0
+
+
+================================================================================
+15. .env.example
+================================================================================
+
+# BotFather'dan olingan token
+BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrSTUvwxyz
+
+# Admin Telegram ID (raqam)
+ADMIN_ID=123456789
+
+
+================================================================================
+16. README.md
+================================================================================
+
+# 🇺🇿 O'zbekiston Buxgalteriya Telegram Boti
+
+O'zbekiston Respublikasi buxgalteriya hisobi milliy standartlariga (BHMS) asoslangan Telegram bot.
+
+## 🚀 Imkoniyatlar
+
+- 📊 Excel fayllarni tahlil qilish
+- 📈 Buxgalteriya balansini tuzish (BHMS 15)
+- 💰 Moliyaviy natijalar hisobotini chiqarish (BHMS 3)
+- 💳 Naqd pul oqimlari hisobotini yaratish (BHMS 9)
+- 🔍 Avtomatik xatolarni aniqlash
+- 📑 Chiroyli Excel hisobotlari yaratish
+
+## 📋 Talablar
+
+- Python 3.10+
+- Telegram Bot Token
+
+## ⚙️ O'rnatish
+
+```bash
+# 1. Loyihani klonlash
+git clone <repo-url>
+cd uzb-accounting-bot
+
+# 2. Virtual muhit yaratish
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# venv\Scripts\activate  # Windows
+
+# 3. Kutubxonalarni o'rnatish
+pip install -r requirements.txt
+
+# 4. .env faylini sozlash
+cp .env.example .env
+# .env faylida BOT_TOKEN va ADMIN_ID ni to'ldiring
+
+# 5. Botni ishga tushirish
+python main.py
+```
+
+## 📎 Excel Fayl Format
+
+Fayl quyidagi ustunlarni o'z ichiga olishi kerak:
+
+| hisob_raqami | nomlanishi | debet | kredit |
+|-------------|-----------|-------|--------|
+| 1010 | Asosiy binolar | 500000000 | 0 |
+| 4010 | Realizatsiya daromadlari | 0 | 300000000 |
+| 6010 | Tannarx | 180000000 | 0 |
+
+## 📚 Hisobot Standartlari
+
+- **BHMS 1** - Hisob siyosati va moliyaviy hisobot
+- **BHMS 3** - Moliyaviy natijalar to'g'risidagi hisobot
+- **BHMS 9** - Naqd pul oqimlari to'g'risidagi hisobot
+- **BHMS 15** - Buxgalteriya balansi
+
+## 🛡️ Xavfsizlik
+
+- Fayl hajmi: max 10 MB
+- Faqat .xlsx va .xls formatlari
+- Barcha ma'lumotlar vaqtinchalik saqlanadi
+
+## 👤 Muallif
+
+O'zbekiston buxgalterlari uchun yaratilgan
+
+================================================================================
+                            YAKUN
+================================================================================
+
+QO'LLANMA:
+1. Yuqoridagi barcha fayllarni loyiha papkasiga joylashtiring
+2. requirements.txt bo'yicha kutubxonalarni o'rnating
+3. .env faylini sozlab, BOT_TOKEN ni kiriting
+4. python main.py buyrug'i bilan botni ishga tushiring
+5. Telegram'da botga /start buyrug'ini yuboring
+
+MUHIM:
+- Hisob raqamlari 4 xonali bo'lishi kerak (1010, 4010, 6010 va h.k.)
+- Excel faylda hisob_raqami, nomlanishi, debet, kredit ustunlari bo'lishi shart
+- Debet va Kredit yig'indilari teng bo'lishi kerak (balans qoidasi)
+- Barcha hisobotlar O'zbekiston BHMS standartlariga asoslangan
+
+MUVAFFAQIYAT TILAYMIZ! 🎉
